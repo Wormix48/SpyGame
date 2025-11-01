@@ -282,30 +282,34 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         setError(null);
         
         // --- Database Cleanup ---
-        try {
-            const allRoomsRef = db.ref('rooms');
-            const snapshot = await allRoomsRef.get();
-            if (snapshot.exists()) {
-                const allRooms = snapshot.val();
-                const updates: { [key: string]: null } = {};
-                for (const roomId in allRooms) {
-                    const room = allRooms[roomId];
-                    const players = room.players ? Object.values(room.players) : [];
-                    const hasConnectedPlayers = players.some(p => p.connectionStatus === 'connected');
-                    const hasAnyPlayers = players.length > 0;
+        // Wrap cleanup in setTimeout to ensure Firebase connection is established
+        setTimeout(async () => {
+            try {
+                const allRoomsRef = db.ref('rooms');
+                const snapshot = await allRoomsRef.get();
+                if (snapshot.exists()) {
+                    const allRooms = snapshot.val();
+                    const updates: { [key: string]: null } = {};
+                    for (const roomId in allRooms) {
+                        const room = allRooms[roomId];
+                        // Check if there are any connected players in the room
+                        const connectedPlayers = room.players ? Object.values(room.players).filter((p: Player) => p.connectionStatus === 'connected') : [];
 
-                    // Remove rooms with no players, or rooms where all players are disconnected
-                    if (!hasAnyPlayers || (hasAnyPlayers && !hasConnectedPlayers)) {
-                        updates[`/rooms/${roomId}`] = null;
+                        // Remove rooms with no connected players
+                        if (connectedPlayers.length === 0) {
+                            updates[`/rooms/${roomId}`] = null;
+                        }
+                    }
+                    if (Object.keys(updates).length > 0) {
+                        await db.ref().update(updates);
                     }
                 }
-                if (Object.keys(updates).length > 0) {
-                    await db.ref().update(updates);
-                }
+            } catch (e) {
+                console.warn("Cleanup script failed:", e);
+                // Optionally, display a user-facing error if cleanup is critical
+                // setError("Не удалось очистить старые комнаты. Пожалуйста, попробуйте позже.");
             }
-        } catch (e) {
-            console.warn("Cleanup script failed:", e);
-        }
+        }, 2000); // Delay for 2 seconds to allow Firebase connection to establish
         // --- End Cleanup ---
 
         const playerId = localPlayerId;
