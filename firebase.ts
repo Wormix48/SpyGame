@@ -1,5 +1,5 @@
-import firebase from 'firebase/compat/app';
-import 'firebase/compat/database';
+import firebase from 'firebase/app';
+import 'firebase/database';
 
 // Your web app's Firebase configuration
 const firebaseConfig = JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG);
