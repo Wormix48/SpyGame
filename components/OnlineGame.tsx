@@ -11,6 +11,7 @@ import { LoadingScreen } from './LoadingScreen';
 import { generateId, checkWinConditions, generateNewQuestion } from '../utils';
 import { Chat } from './Chat';
 import { db } from '../firebase';
+import firebase from 'firebase/app';
 import { DebugMenu } from './DebugMenu';
 import { NextRoundSyncScreen } from './NextRoundSyncScreen';
 
