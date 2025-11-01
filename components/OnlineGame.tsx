@@ -157,6 +157,46 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         }
     }, [gameState, localPlayerId]);
 
+    // Host migration logic
+    useEffect(() => {
+        if (!gameState?.roomId || !localPlayerId || isHost) return;
+
+        const hostPlayer = gameState.players[gameState.hostId];
+        if (hostPlayer && hostPlayer.connectionStatus === 'disconnected') {
+            console.log(`Host ${hostPlayer.name} (${hostPlayer.id}) disconnected. Initiating host migration.`);
+
+            const roomRef = db.ref(`rooms/${gameState.roomId}`);
+            roomRef.transaction((currentRoomState: GameState | null) => {
+                if (!currentRoomState) return currentRoomState;
+
+                const disconnectedHost = currentRoomState.players[currentRoomState.hostId];
+                if (!disconnectedHost || disconnectedHost.connectionStatus !== 'disconnected') {
+                    return currentRoomState; // Host is not disconnected, or already migrated
+                }
+
+                const remainingPlayers = Object.values(currentRoomState.players).filter(p => p.id !== currentRoomState.hostId && p.connectionStatus === 'connected');
+
+                if (remainingPlayers.length > 0) {
+                    const nextHost = remainingPlayers.sort((a: Player, b: Player) => (a.joinTimestamp || 0) - (b.joinTimestamp || 0))[0];
+                    currentRoomState.hostId = nextHost.id;
+                    if (currentRoomState.players[nextHost.id]) {
+                        currentRoomState.players[nextHost.id].isHost = true;
+                    }
+                    // Mark old host as not host
+                    if (currentRoomState.players[disconnectedHost.id]) {
+                        currentRoomState.players[disconnectedHost.id].isHost = false;
+                    }
+                    console.log(`Host migrated to ${nextHost.name} (${nextHost.id})`);
+                } else {
+                    // If no connected players remain, the room should ideally be cleaned up.
+                    // This will be handled by the cleanup logic in handleCreateRoom or a more robust solution.
+                    console.log("No connected players left to become host. Room might become empty.");
+                }
+                return currentRoomState;
+            }).catch(e => console.error("Failed to perform host migration transaction:", e));
+        }
+    }, [gameState, localPlayerId, isHost]);
+
     // Cleanup function for explicit exit
     const handleLeaveRoom = useCallback((shouldCallOnExit: boolean = true) => {
         if (isExitingRef.current) return;
@@ -252,7 +292,10 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     const room = allRooms[roomId];
                     const players = room.players ? Object.values(room.players) : [];
                     const hasConnectedPlayers = players.some(p => p.connectionStatus === 'connected');
-                    if (players.length === 0 || !hasConnectedPlayers) {
+                    const hasAnyPlayers = players.length > 0;
+
+                    // Remove rooms with no players, or rooms where all players are disconnected
+                    if (!hasAnyPlayers || (hasAnyPlayers && !hasConnectedPlayers)) {
                         updates[`/rooms/${roomId}`] = null;
                     }
                 }
