@@ -37,7 +37,7 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         const updates: { [key: string]: any } = {};
         let shouldUpdate = false;
         
-        const fakePlayerIds = Object.keys(gameState.players).filter(id => id.startsWith('BOT-'));
+        const fakePlayerIds = gameState.players ? Object.keys(gameState.players).filter(id => id.startsWith('BOT-')) : [];
 
         fakePlayerIds.forEach(botId => {
             const bot = gameState.players[botId];
