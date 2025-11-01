@@ -11,6 +11,7 @@ export interface Player {
   roleAcknowledged?: boolean;
   readyForNextRound?: boolean;
   joinTimestamp?: any;
+  firebaseAuthUid: string; // Add this line
 }
 
 export type QuestionType = 'YES_NO' | 'SCALE_4' | 'PLAYERS';

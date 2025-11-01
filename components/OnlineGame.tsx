@@ -8,7 +8,7 @@ import { ResultsDiscussionScreen } from './ResultsDiscussionScreen';
 import { VoteRevealScreen } from './VoteRevealScreen';
 import { GameOverScreen } from './GameOverScreen';
 import { LoadingScreen } from './LoadingScreen';
-import { generateId, checkWinConditions, generateNewQuestion } from '../utils';
+import { generateId, checkWinConditions, generateNewQuestion, generateUuid } from '../utils';
 import { Chat } from './Chat';
 import { db, ensureUserIsAuthenticated } from '../firebase';
 import firebase from 'firebase/app';
@@ -29,7 +29,8 @@ interface OnlineGameProps {
 }
 
 export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExit, initialRoomId, isDebugMenuOpen, closeDebugMenu, isKonamiActive }, ref) => {
-    const [localPlayerId, setLocalPlayerId] = useState<string | null>(null);
+    const [localPlayerId, setLocalPlayerId] = useState<string | null>(null); // This will now be the instanceId
+    const [firebaseAuthUid, setFirebaseAuthUid] = useState<string | null>(null); // The actual Firebase auth.uid
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -46,11 +47,12 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const localPlayerIdRef = useRef(localPlayerId);
     localPlayerIdRef.current = localPlayerId;
 
-    // Authenticate user on component mount
+    // Authenticate user on component mount and generate instanceId
     useEffect(() => {
         ensureUserIsAuthenticated()
             .then(user => {
-                setLocalPlayerId(user.uid);
+                setFirebaseAuthUid(user.uid);
+                setLocalPlayerId(generateUuid()); // Generate a unique ID for this instance
                 setIsAuthReady(true);
             })
             .catch(authError => {
@@ -142,7 +144,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
             const listener = connectedRef.on('value', (snap) => {
                 if (snap.val() === true) {
-                    playerRef.onDisconnect().remove(err => {
+                    playerRef.onDisconnect().update({ connectionStatus: 'disconnected' }, err => {
                         if (err) console.error("onDisconnect failed to set up:", err);
                     });
                     playerRef.update({ connectionStatus: 'connected' }).catch(e => console.error("Firebase set status error:", e));
@@ -249,7 +251,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 for (const roomId in allRooms) {
                     const room = allRooms[roomId];
                     const players = room.players ? Object.values(room.players) : [];
-                    if (players.length === 0) {
+                    const hasConnectedPlayers = players.some(p => p.connectionStatus === 'connected');
+                    if (players.length === 0 || !hasConnectedPlayers) {
                         updates[`/rooms/${roomId}`] = null;
                     }
                 }
@@ -263,14 +266,15 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         // --- End Cleanup ---
 
         const playerId = localPlayerId;
-        if (!playerId) {
+        const authUid = firebaseAuthUid;
+        if (!playerId || !authUid) {
             setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
             setIsLoading(false);
             return;
         }
         const roomId = generateId();
 
-        const hostPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: true, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any };
+        const hostPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: true, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, firebaseAuthUid: authUid };
         const initialState: GameState = {
             roomId, hostId: playerId, gamePhase: 'SETUP', players: { [playerId]: hostPlayer },
             initialSpyCount: 1, votingEnabled: true, questionSource: 'library', familyFriendly: true,
@@ -324,7 +328,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     
             if (disconnectedPlayer) {
                 const playerId = localPlayerId;
-                if (!playerId) {
+                const authUid = firebaseAuthUid;
+                if (!playerId || !authUid) {
                     setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
                     setIsLoading(false);
                     return;
@@ -335,11 +340,9 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     updates[`players/${playerId}/avatar`] = avatar;
                 }
     
-                await roomRef.update(updates); // Only update avatar if needed, status will be set by the main connection logic
-    
-                setLocalPlayerId(playerId);
-                subscribeToGameState(upperRoomId, playerId);
-                localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId }));
+            setLocalPlayerId(playerId);
+            subscribeToGameState(upperRoomId, playerId);
+            localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId }));
                 return;
             }
     
@@ -360,18 +363,19 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
     
             const playerId = localPlayerId;
-            if (!playerId) {
+            const authUid = firebaseAuthUid;
+            if (!playerId || !authUid) {
                 setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
                 setIsLoading(false);
                 return;
             }
-            const newPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any };
+            const newPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, firebaseAuthUid: authUid };
             const playerRef = db.ref(`rooms/${upperRoomId}/players/${playerId}`);
             await playerRef.set(newPlayer);
     
-            setLocalPlayerId(playerId);
-            subscribeToGameState(upperRoomId, playerId);
-            localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId }));
+                setLocalPlayerId(playerId);
+                subscribeToGameState(upperRoomId, playerId);
+                localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId }));
     
         } catch (e) {
             console.error("Failed to join room: ", e);

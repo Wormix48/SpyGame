@@ -2,25 +2,29 @@
   "rules": {
     "rooms": {
       "$roomId": {
-        // A user can read a room's data if they are a player in that room.
-        ".read": "data.child('players').hasChild(auth.uid)",
+        // Allow any authenticated user to read the room data if it exists,
+        // to allow checking game state before joining.
+        ".read": "auth != null && data.exists()",
 
         // Write is allowed if:
         // 1. Creating a new room: The room doesn't exist, and the new hostId is the creator's UID.
         // 2. Updating an existing room: The user is already a player in that room.
-        ".write": "(!data.exists() && newData.child('hostId').val() === auth.uid && newData.child('players').child(auth.uid).exists()) || (data.exists() && data.child('players').hasChild(auth.uid))",
+        // 3. Deleting an existing room if it is empty (no players).
+        ".write": "(!data.exists() && newData.child('hostId').val() === auth.uid && newData.child('players').child(auth.uid).exists()) || (data.exists() && data.child('players').hasChild(auth.uid)) || (data.exists() && !data.child('players').exists() && auth != null)",
 
         "players": {
+          ".read": "auth != null", // Allow any authenticated user to read players to check for existing names
           "$playerId": {
-            // A player can write to their own data.
+            // A player can write to their own data if their firebaseAuthUid matches auth.uid.
             // The host can also write to any player's data (to eliminate, assign roles, etc.).
-            ".write": "auth.uid === $playerId || data.parent().parent().child('hostId').val() === auth.uid"
+            // Additionally, a new player can create their own entry if the game is in SETUP phase.
+            ".write": "newData.child('firebaseAuthUid').val() === auth.uid || data.parent().parent().child('hostId').val() === auth.uid || (!data.exists() && newData.child('id').val() === auth.uid && data.parent().parent().child('gamePhase').val() === 'SETUP')"
           }
         },
 
         // Only the host can change critical game state properties.
         "hostId":          { ".write": "data.parent().child('hostId').val() === auth.uid" },
-        "gamePhase":       { ".write": "data.parent().child('hostId').val() === auth.uid" },
+        "gamePhase":       { ".read": "auth != null", ".write": "data.parent().child('hostId').val() === auth.uid" },
         "currentQuestion": { ".write": "data.parent().child('hostId').val() === auth.uid" },
         "lastEliminated":  { ".write": "data.parent().child('hostId').val() === auth.uid" },
         "winner":          { ".write": "data.parent().child('hostId').val() === auth.uid" },
