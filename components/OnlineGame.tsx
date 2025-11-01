@@ -10,7 +10,7 @@ import { GameOverScreen } from './GameOverScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { generateId, checkWinConditions, generateNewQuestion } from '../utils';
 import { Chat } from './Chat';
-import { db } from '../firebase';
+import { db, ensureUserIsAuthenticated } from '../firebase';
 import firebase from 'firebase/app';
 import 'firebase/auth';
 import { DebugMenu } from './DebugMenu';
@@ -45,6 +45,20 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     gameStateRef.current = gameState;
     const localPlayerIdRef = useRef(localPlayerId);
     localPlayerIdRef.current = localPlayerId;
+
+    // Authenticate user on component mount
+    useEffect(() => {
+        ensureUserIsAuthenticated()
+            .then(user => {
+                setLocalPlayerId(user.uid);
+                setIsAuthReady(true);
+            })
+            .catch(authError => {
+                console.error("Authentication failed:", authError);
+                setError("Не удалось анонимно войти. Проверьте настройки Firebase или сетевое подключение.");
+                setIsAuthReady(true);
+            });
+    }, []);
 
     const isHost = gameState?.hostId === localPlayerId;
     const playerList = useMemo(() => {
@@ -121,17 +135,6 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         gameStateUnsubscribeRef.current = () => roomRef.off('value', onValueCallback);
     }, []);
 
-    // Manages connection status for the current player
-    useEffect(() => {
-        const unsubscribe = firebase.auth().onAuthStateChanged(user => {
-            if (user) {
-                setLocalPlayerId(user.uid);
-            }
-            setIsAuthReady(true);
-        });
-        return () => unsubscribe();
-    }, []);
-
     useEffect(() => {
         if (gameState?.roomId && localPlayerId) {
             const playerRef = db.ref(`rooms/${gameState.roomId}/players/${localPlayerId}`);
@@ -150,7 +153,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 connectedRef.off('value', listener);
             };
         }
-    }, [gameState?.roomId, localPlayerId]);
+    }, [gameState, localPlayerId]);
 
     // Cleanup function for explicit exit
     const handleLeaveRoom = useCallback((shouldCallOnExit: boolean = true) => {
@@ -259,7 +262,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         }
         // --- End Cleanup ---
 
-        const playerId = firebase.auth().currentUser?.uid;
+        const playerId = localPlayerId;
         if (!playerId) {
             setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
             setIsLoading(false);
@@ -320,7 +323,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             const disconnectedPlayer = players.find(p => p.name === playerName && p.connectionStatus === 'disconnected');
     
             if (disconnectedPlayer) {
-                const playerId = firebase.auth().currentUser?.uid;
+                const playerId = localPlayerId;
                 if (!playerId) {
                     setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
                     setIsLoading(false);
@@ -356,7 +359,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 return;
             }
     
-            const playerId = firebase.auth().currentUser?.uid;
+            const playerId = localPlayerId;
             if (!playerId) {
                 setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
                 setIsLoading(false);

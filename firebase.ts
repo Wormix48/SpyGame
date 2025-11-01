@@ -10,14 +10,17 @@ const app = firebase.initializeApp(firebaseConfig);
 export const db = firebase.database();
 export { firebase };
 
-firebase.auth().onAuthStateChanged((user) => {
-  if (user) {
-    // User is signed in.
-    console.log("User is signed in anonymously with UID:", user.uid);
-  } else {
-    // User is signed out.
-    firebase.auth().signInAnonymously().catch((error) => {
-      console.error("Anonymous sign-in failed:", error);
+export const ensureUserIsAuthenticated = (): Promise<firebase.User> => {
+  return new Promise((resolve, reject) => {
+    const unsubscribe = firebase.auth().onAuthStateChanged(user => {
+      unsubscribe(); // We only need this listener once at startup
+      if (user) {
+        resolve(user);
+      } else {
+        firebase.auth().signInAnonymously()
+          .then(userCredential => resolve(userCredential.user!))
+          .catch(error => reject(error));
+      }
     });
-  }
-});
+  });
+};
