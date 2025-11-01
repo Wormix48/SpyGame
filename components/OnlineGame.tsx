@@ -11,7 +11,8 @@ import { LoadingScreen } from './LoadingScreen';
 import { generateId, checkWinConditions, generateNewQuestion } from '../utils';
 import { Chat } from './Chat';
 import { db } from '../firebase';
-import { ref, onValue, off, set, update, remove, transaction, serverTimestamp } from 'firebase/database';
+// FIX: Switched to Firebase v8 compatibility API.
+import firebase from 'firebase/compat/app';
 import { DebugMenu } from './DebugMenu';
 import { NextRoundSyncScreen } from './NextRoundSyncScreen';
 
@@ -85,7 +86,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
 
     const subscribeToGameState = useCallback((roomId: string, playerId: string) => {
-        const roomRef = ref(db, `rooms/${roomId}`);
+        const roomRef = db.ref(`rooms/${roomId}`);
         const onValueCallback = (snapshot: firebase.database.DataSnapshot) => {
             if (isExitingRef.current) return;
     
@@ -121,8 +122,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     // Manages connection status for the current player
     useEffect(() => {
         if (gameState?.roomId && localPlayerId) {
-            const playerRef = ref(db, `rooms/${gameState.roomId}/players/${localPlayerId}`);
-            const connectedRef = ref(db, '.info/connected');
+            const playerRef = db.ref(`rooms/${gameState.roomId}/players/${localPlayerId}`);
+            const connectedRef = db.ref('.info/connected');
 
             const listener = connectedRef.on('value', (snap) => {
                 if (snap.val() === true) {
@@ -155,10 +156,10 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         const currentLocalPlayerId = localPlayerIdRef.current;
 
         if (roomId && currentLocalPlayerId) {
-            const playerRef = ref(db, `rooms/${roomId}/players/${currentLocalPlayerId}`);
+            const playerRef = db.ref(`rooms/${roomId}/players/${currentLocalPlayerId}`);
             playerRef.onDisconnect().cancel(); // Cancel the onDisconnect handler
 
-            const roomRef = ref(db, `rooms/${roomId}`);
+            const roomRef = db.ref(`rooms/${roomId}`);
             roomRef.transaction((currentRoomState: GameState | null) => {
                 if (!currentRoomState || !currentRoomState.players || !currentRoomState.players[currentLocalPlayerId]) {
                     return currentRoomState;
@@ -198,7 +199,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
     const updateGameState = useCallback((newState: Partial<GameState>) => {
         if (isHost && gameState?.roomId) {
-            transaction(ref(db, `rooms/${gameState.roomId}`), (currentState) => {
+            db.ref(`rooms/${gameState.roomId}`).transaction((currentState) => {
                 if (currentState) {
                     return { ...currentState, ...newState };
                 }
@@ -214,8 +215,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         
         // --- Database Cleanup ---
         try {
-            const allRoomsRef = ref(db, 'rooms');
-            const snapshot = await get(allRoomsRef);
+            const allRoomsRef = db.ref('rooms');
+            const snapshot = await allRoomsRef.get();
             if (snapshot.exists()) {
                 const allRooms = snapshot.val();
                 const updates: { [key: string]: null } = {};
@@ -227,7 +228,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     }
                 }
                 if (Object.keys(updates).length > 0) {
-                    await update(ref(db), updates);
+                    await db.ref().update(updates);
                 }
             }
         } catch (e) {
@@ -238,7 +239,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         const playerId = generateId();
         const roomId = generateId();
 
-        const hostPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: true, connectionStatus: 'connected', joinTimestamp: serverTimestamp() as any };
+        const hostPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: true, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any };
         const initialState: GameState = {
             roomId, hostId: playerId, gamePhase: 'SETUP', players: { [playerId]: hostPlayer },
             initialSpyCount: 1, votingEnabled: true, questionSource: 'library', familyFriendly: true,
@@ -248,7 +249,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         };
         
         try {
-            await set(ref(db, `rooms/${roomId}`), initialState);
+            await db.ref(`rooms/${roomId}`).set(initialState);
             setLocalPlayerId(playerId);
             subscribeToGameState(roomId, playerId);
             localStorage.setItem('spy-game-session', JSON.stringify({ roomId, playerId }));
@@ -265,10 +266,10 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         setIsLoading(true);
         setError(null);
         const upperRoomId = roomId.toUpperCase();
-        const roomRef = ref(db, `rooms/${upperRoomId}`);
+        const roomRef = db.ref(`rooms/${upperRoomId}`);
     
         try {
-            const snapshot = await get(roomRef);
+            const snapshot = await roomRef.get();
             if (!snapshot.exists()) {
                 setError('Комната не найдена. Проверьте код.');
                 return;
@@ -279,7 +280,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             // --- GHOST ROOM CLEANUP ---
             const playersInRoom = roomState.players ? Object.values(roomState.players) : [];
             if (playersInRoom.length === 0) {
-                await remove(roomRef);
+                await roomRef.remove();
                 setError('Комната не найдена (была пуста и удалена).');
                 return;
             }
@@ -298,7 +299,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     updates[`players/${playerId}/avatar`] = avatar;
                 }
     
-                await update(roomRef, updates); // Only update avatar if needed, status will be set by the main connection logic
+                await roomRef.update(updates); // Only update avatar if needed, status will be set by the main connection logic
     
                 setLocalPlayerId(playerId);
                 subscribeToGameState(upperRoomId, playerId);
@@ -323,9 +324,9 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
     
             const playerId = generateId();
-            const newPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: serverTimestamp() as any };
-            const playerRef = ref(db, `rooms/${upperRoomId}/players/${playerId}`);
-            await set(playerRef, newPlayer);
+            const newPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any };
+            const playerRef = db.ref(`rooms/${upperRoomId}/players/${playerId}`);
+            await playerRef.set(newPlayer);
     
             setLocalPlayerId(playerId);
             subscribeToGameState(upperRoomId, playerId);
@@ -341,8 +342,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
     const handleTransferHost = (newHostId: string) => {
         if (!isHost || !gameState?.roomId || !localPlayerId) return;
-        const roomRef = ref(db, `rooms/${gameState.roomId}`);
-        update(roomRef, {
+        const roomRef = db.ref(`rooms/${gameState.roomId}`);
+        roomRef.update({
             hostId: newHostId,
             [`players/${newHostId}/isHost`]: true,
             [`players/${localPlayerId}/isHost`]: false,
@@ -479,8 +480,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
     const handleAction = (path: string, value: any, condition?: (currentData: any) => boolean) => {
         if (!gameState?.roomId || !localPlayerId) return;
-        const actionRef = ref(db, `rooms/${gameState.roomId}/${path}`);
-        transaction(actionRef, (currentData) => {
+        const actionRef = db.ref(`rooms/${gameState.roomId}/${path}`);
+        actionRef.transaction((currentData) => {
             if(condition && condition(currentData)) {
                 return; // Abort transaction
             }
@@ -523,7 +524,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
     const handleAcknowledgeRole = () => {
         if (!gameState?.roomId || !localPlayerId) return;
-        set(ref(db, `rooms/${gameState.roomId}/players/${localPlayerId}/roleAcknowledged`), true)
+        db.ref(`rooms/${gameState.roomId}/players/${localPlayerId}/roleAcknowledged`).set(true)
             .catch(e => console.error("Firebase set roleAcknowledged error:", e));
     };
 
@@ -559,8 +560,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     
     const handleReadyForNextRound = useCallback(() => {
         if (gameState?.roomId && localPlayerId) {
-            const playerReadyRef = ref(db, `rooms/${gameState.roomId}/players/${localPlayerId}/readyForNextRound`);
-            set(playerReadyRef, true).catch(e => console.error("Firebase set readyForNextRound error:", e));
+            const playerReadyRef = db.ref(`rooms/${gameState.roomId}/players/${localPlayerId}/readyForNextRound`);
+            playerReadyRef.set(true).catch(e => console.error("Firebase set readyForNextRound error:", e));
         }
     }, [gameState?.roomId, localPlayerId]);
 
@@ -599,8 +600,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
     const handleSendMessage = (text: string) => {
         if (!localPlayer || !gameState?.roomId) return;
-        const message: ChatMessage = { senderId: localPlayer.id, senderName: localPlayer.name, senderAvatar: localPlayer.avatar || null, text, timestamp: serverTimestamp() as any, status: 'sent' };
-        push(ref(db, `rooms/${gameState.roomId}/chatMessages`), message).catch(e => console.error("Failed to send message:", e));
+        const message: ChatMessage = { senderId: localPlayer.id, senderName: localPlayer.name, senderAvatar: localPlayer.avatar || null, text, timestamp: firebase.database.ServerValue.TIMESTAMP as any, status: 'sent' };
+        db.ref(`rooms/${gameState.roomId}/chatMessages`).push(message).catch(e => console.error("Failed to send message:", e));
     };
 
     const handleChatOpen = useCallback(() => {
@@ -608,7 +609,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             return;
         }
 
-        const chatMessagesRef = ref(db, `rooms/${gameState.roomId}/chatMessages`);
+        const chatMessagesRef = db.ref(`rooms/${gameState.roomId}/chatMessages`);
         const updates: { [key: string]: 'read' } = {};
 
         const messageRecord = gameState.chatMessages as Record<string, ChatMessage>;
@@ -627,8 +628,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     
     const handleKickPlayer = (playerId: string) => {
         if (isHost && gameState?.roomId) {
-            const playerRef = ref(db, `rooms/${gameState.roomId}/players/${playerId}`);
-            remove(playerRef).catch(e => console.error("Failed to kick player:", e));
+            const playerRef = db.ref(`rooms/${gameState.roomId}/players/${playerId}`);
+            playerRef.remove().catch(e => console.error("Failed to kick player:", e));
         }
     };
 

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { GameState, Player, Answer, Vote, ChatMessage } from '../types';
 import { db } from '../firebase';
-import firebase from 'firebase/app';
-import 'firebase/database'; // Import database module for ServerValue.TIMESTAMP
+// FIX: Switched to Firebase v8 compatibility API.
+import firebase from 'firebase/compat/app';
 import { generateId } from '../utils';
 import { Avatar } from './Avatar';
 
