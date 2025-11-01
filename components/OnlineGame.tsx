@@ -370,26 +370,34 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
             const players = Object.values(roomState.players || {}) as Player[];
     
-            // Rejoin Logic (check for disconnected players with the same name)
-            const disconnectedPlayer = players.find(p => p.name === playerName && p.connectionStatus === 'disconnected');
+            // Rejoin Logic (check for disconnected players with the same Firebase Auth UID)
+            const rejoiningPlayerAuthUid = firebaseAuthUid;
+            const disconnectedPlayerByAuthUid = players.find(p => p.firebaseAuthUid === rejoiningPlayerAuthUid && p.connectionStatus === 'disconnected');
     
-            if (disconnectedPlayer) {
-                const playerId = localPlayerId;
-                const authUid = firebaseAuthUid;
-                if (!playerId || !authUid) {
+            if (disconnectedPlayerByAuthUid) {
+                const rejoiningPlayerId = disconnectedPlayerByAuthUid.id;
+                if (!rejoiningPlayerId || !rejoiningPlayerAuthUid) {
                     setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
                     setIsLoading(false);
                     return;
                 }
     
                 const updates: { [key: string]: any } = {};
-                if (disconnectedPlayer.avatar !== avatar) {
-                    updates[`players/${playerId}/avatar`] = avatar;
+                updates[`players/${rejoiningPlayerId}/connectionStatus`] = 'connected';
+                if (disconnectedPlayerByAuthUid.name !== playerName) {
+                    updates[`players/${rejoiningPlayerId}/name`] = playerName;
                 }
+                if (disconnectedPlayerByAuthUid.avatar !== avatar) {
+                    updates[`players/${rejoiningPlayerId}/avatar`] = avatar;
+                }
+                // Ensure firebaseAuthUid is correct, though it should already match
+                updates[`players/${rejoiningPlayerId}/firebaseAuthUid`] = rejoiningPlayerAuthUid;
+
+                await roomRef.update(updates);
     
-            setLocalPlayerId(playerId);
-            subscribeToGameState(upperRoomId, playerId);
-            localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId }));
+                setLocalPlayerId(rejoiningPlayerId);
+                subscribeToGameState(upperRoomId, rejoiningPlayerId);
+                localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId: rejoiningPlayerId }));
                 return;
             }
     
