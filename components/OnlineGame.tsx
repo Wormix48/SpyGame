@@ -11,7 +11,7 @@ import { LoadingScreen } from './LoadingScreen';
 import { generateId, checkWinConditions, generateNewQuestion } from '../utils';
 import { Chat } from './Chat';
 import { db } from '../firebase';
-import { ref, onValue, off, set, update, remove, runTransaction, serverTimestamp } from 'firebase/database';
+import { ref, onValue, off, set, update, remove, transaction, serverTimestamp } from 'firebase/database';
 import { DebugMenu } from './DebugMenu';
 import { NextRoundSyncScreen } from './NextRoundSyncScreen';
 
@@ -159,7 +159,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             playerRef.onDisconnect().cancel(); // Cancel the onDisconnect handler
 
             const roomRef = ref(db, `rooms/${roomId}`);
-            runTransaction(roomRef, (currentRoomState: GameState | null) => {
+            roomRef.transaction((currentRoomState: GameState | null) => {
                 if (!currentRoomState || !currentRoomState.players || !currentRoomState.players[currentLocalPlayerId]) {
                     return currentRoomState;
                 }
@@ -198,7 +198,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
     const updateGameState = useCallback((newState: Partial<GameState>) => {
         if (isHost && gameState?.roomId) {
-            runTransaction(ref(db, `rooms/${gameState.roomId}`), (currentState) => {
+            transaction(ref(db, `rooms/${gameState.roomId}`), (currentState) => {
                 if (currentState) {
                     return { ...currentState, ...newState };
                 }
@@ -480,7 +480,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const handleAction = (path: string, value: any, condition?: (currentData: any) => boolean) => {
         if (!gameState?.roomId || !localPlayerId) return;
         const actionRef = ref(db, `rooms/${gameState.roomId}/${path}`);
-        runTransaction(actionRef, (currentData) => {
+        transaction(actionRef, (currentData) => {
             if(condition && condition(currentData)) {
                 return; // Abort transaction
             }
