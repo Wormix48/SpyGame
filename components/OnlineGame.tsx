@@ -11,8 +11,6 @@ import { LoadingScreen } from './LoadingScreen';
 import { generateId, checkWinConditions, generateNewQuestion } from '../utils';
 import { Chat } from './Chat';
 import { db } from '../firebase';
-// FIX: Switched to Firebase v8 compatibility API.
-import firebase from 'firebase/compat/app';
 import { DebugMenu } from './DebugMenu';
 import { NextRoundSyncScreen } from './NextRoundSyncScreen';
 
