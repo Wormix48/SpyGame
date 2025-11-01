@@ -76,7 +76,7 @@ export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPl
         </>
       )}
 
-      {revealSpies && votes.length > 0 && (
+      {!anonymousVoting && votes.length > 0 && (
           <div className="w-full max-w-md">
             <h3 className="text-xl font-semibold mb-3">Детали голосования:</h3>
             <div className="space-y-2 text-left">
