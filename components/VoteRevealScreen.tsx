@@ -11,6 +11,7 @@ interface VoteRevealScreenProps {
   isHost: boolean;
   isLocalMode: boolean;
   anonymousVoting: boolean;
+  revealSpies: boolean;
 }
 
 const AshEffect: React.FC = () => {
@@ -38,7 +39,7 @@ const AshEffect: React.FC = () => {
     );
 };
 
-export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPlayer, votes, players, onContinue, isHost, isLocalMode, anonymousVoting }) => {
+export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPlayer, votes, players, onContinue, isHost, isLocalMode, anonymousVoting, revealSpies }) => {
   const getPlayer = (id: string): Player | undefined => players.find(p => p.id === id);
   const [startBurnEffect, setStartBurnEffect] = useState(false);
 
@@ -75,7 +76,7 @@ export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPl
         </>
       )}
 
-      {!anonymousVoting && votes.length > 0 && (
+      {revealSpies && votes.length > 0 && (
           <div className="w-full max-w-md">
             <h3 className="text-xl font-semibold mb-3">Детали голосования:</h3>
             <div className="space-y-2 text-left">

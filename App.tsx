@@ -8,6 +8,7 @@ const App: React.FC = () => {
   const [gameMode, setGameMode] = useState<'online' | 'local' | null>(null);
   const [initialRoomId, setInitialRoomId] = useState<string | null>(null);
   const [isDebugMenuOpen, setIsDebugMenuOpen] = useState(false);
+  const [isKonamiActive, setIsKonamiActive] = useState(false);
   const onlineGameRef = useRef<OnlineGameHandle | null>(null);
 
   useEffect(() => {
@@ -32,6 +33,7 @@ const App: React.FC = () => {
         keySequence = keySequence.slice(-code.length);
 
         if (keySequence.join('') === code.join('')) {
+            setIsKonamiActive(prev => !prev);
             document.body.classList.toggle('spy-reveal-mode');
             keySequence = []; // Reset
         }
@@ -58,7 +60,7 @@ const App: React.FC = () => {
   const renderGame = () => {
     switch(gameMode) {
       case 'online':
-        return <OnlineGame ref={onlineGameRef} onExit={handleNewGame} initialRoomId={initialRoomId} isDebugMenuOpen={isDebugMenuOpen} closeDebugMenu={() => setIsDebugMenuOpen(false)} />;
+        return <OnlineGame ref={onlineGameRef} onExit={handleNewGame} initialRoomId={initialRoomId} isDebugMenuOpen={isDebugMenuOpen} closeDebugMenu={() => setIsDebugMenuOpen(false)} isKonamiActive={isKonamiActive} />;
       case 'local':
         return <LocalGame onExit={handleNewGame} />;
       default:

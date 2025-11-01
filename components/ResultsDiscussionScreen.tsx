@@ -55,6 +55,7 @@ interface ResultsDiscussionScreenProps {
   answers: Answer[];
   isHost: boolean;
   isLocalMode: boolean;
+  revealVotes?: boolean;
   
   // Online props (optional)
   votes?: Vote[];
@@ -81,9 +82,16 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
     question, players, answers, votes = [], localPlayerId = '', onVote = (votedForId: string | null) => {}, onTally = () => {}, 
     votingEnabled = true, timerEnd, isHost, isLocalMode, noTimer, 
     onFinishLocalVoting = (votes: Vote[]) => {}, localSequentialVoter, onFinishLocalSequentialVote = (vote: Vote) => {}, onKickPlayer = (playerId: string) => {}, onTransferHost = (playerId: string) => {},
-    isDiscussionOnly = false, onProceedToVote = () => {}, showQuestionToSpy = true
+    isDiscussionOnly = false, onProceedToVote = () => {}, showQuestionToSpy = true, revealVotes = false
 }) => {
   const [localVotes, setLocalVotes] = useState<Record<string, string | null>>({});
+
+  const getVoteForPlayer = (playerId: string) => {
+    const vote = votes.find(v => v.voterId === playerId);
+    if (!vote) return null;
+    if (vote.votedForId === null) return 'Пропустил';
+    return players.find(p => p.id === vote.votedForId)?.name || 'Неизвестно';
+  };
 
   const shouldShowQuestion = () => {
     if (isLocalMode) {
@@ -265,22 +273,24 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                     <span className="text-xl font-bold text-white flex items-center gap-2">
                         <span className="player-name-reveal-spy" data-is-spy={player.isSpy}>{player.name}</span>
                         {votingEnabled && (
-                            <div title={hasVoted(player.id) ? "Проголосовал(а)" : "Голосует..."}>
-                                {hasVoted(player.id) ? (
-                                    <CheckIcon className="w-5 h-5 text-green-400" />
-                                ) : (
-                                    <div className="w-5 h-5 flex items-center justify-center">
-                                        <div className="w-2.5 h-2.5 bg-slate-500 rounded-full animate-pulse"></div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        {player.connectionStatus === 'disconnected' && <WarningIcon className="w-5 h-5 text-yellow-400" title="Игрок отключился" />}
-                         {isHost && !player.isHost && (
-                            <>
-                                <button onClick={() => onTransferHost(player.id)} className="text-yellow-400 hover:text-yellow-300" title="Передать хоста">
-                                    <KeyIcon className="h-5 w-5" />
-                                </button>
+                                                            <div title={hasVoted(player.id) ? "Проголосовал(а)" : "Голосует..."}>
+                                                                {hasVoted(player.id) ? (
+                                                                    <CheckIcon className="w-5 h-5 text-green-400" />
+                                                                ) : (
+                                                                    <div className="w-5 h-5 flex items-center justify-center">
+                                                                        <div className="w-2.5 h-2.5 bg-slate-500 rounded-full animate-pulse"></div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {revealVotes && hasVoted(player.id) && (
+                                                            <span className="text-sm text-yellow-400">(за: {getVoteForPlayer(player.id)})</span>
+                                                        )}
+                                                        {player.connectionStatus === 'disconnected' && <WarningIcon className="w-5 h-5 text-yellow-400" title="Игрок отключился" />}
+                                                         {isHost && !player.isHost && (
+                                                            <>
+                                                                <button onClick={() => onTransferHost(player.id)} className="text-yellow-400 hover:text-yellow-300" title="Передать хоста">
+                                                                    <KeyIcon className="h-5 w-5" />                                </button>
                                 <button onClick={() => onKickPlayer(player.id)} className="text-red-400 hover:text-red-300" title="Исключить">
                                     <CrossIcon className="h-5 w-5" />
                                 </button>

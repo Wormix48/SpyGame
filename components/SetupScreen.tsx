@@ -67,11 +67,16 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
   }, [isHost, initialSettings]);
   
   const playerCount = players.length;
+  console.log('SetupScreen: playerCount', playerCount);
 
   const maxSpyCount = useMemo(() => {
     const maxBasedOnBalance = Math.floor((playerCount - 1) / 2);
-    return Math.max(1, Math.min(3, maxBasedOnBalance));
+    const calculatedMax = Math.max(1, Math.min(3, maxBasedOnBalance));
+    console.log('SetupScreen: maxBasedOnBalance', maxBasedOnBalance, 'calculatedMax', calculatedMax);
+    return calculatedMax;
   }, [playerCount]);
+  
+  console.log('SetupScreen: initialSettings.initialSpyCount', initialSettings.initialSpyCount);
   
   useEffect(() => {
     if (isHost && initialSettings.initialSpyCount > maxSpyCount) {
@@ -175,7 +180,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
               <label className="block text-lg font-medium text-slate-300 mb-2">Количество шпионов: <span className="font-bold text-white">{initialSettings.initialSpyCount}</span></label>
               <input
                 type="range" min="1" max={maxSpyCount} value={initialSettings.initialSpyCount}
-                onChange={(e) => onSettingsChange({ spyCount: parseInt(e.target.value, 10) })}
+                onChange={(e) => onSettingsChange({ initialSpyCount: parseInt(e.target.value, 10) })}
                 className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
               />
             </div>

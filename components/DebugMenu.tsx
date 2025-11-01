@@ -141,7 +141,7 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
     const allPlayers = (Object.values(gameState.players) as Player[]).sort((a, b) => (a.joinTimestamp || 0) - (b.joinTimestamp || 0));
     const realPlayers = allPlayers.filter(p => !p.id.startsWith('BOT-'));
     const bots = allPlayers.filter(p => p.id.startsWith('BOT-'));
-    const canForceSpies = gameState.gamePhase === 'SETUP' && onToggleForceSpy && forcedSpies;
+    const canForceSpies = gameState.gamePhase === 'SETUP' && onToggleForceSpy && forcedSpies && revealSpies;
 
     return (
         <div className="fixed bottom-4 right-4 bg-slate-800/90 backdrop-blur-sm rounded-xl shadow-lg border border-cyan-500 z-50 w-96 max-h-[90vh] flex flex-col text-white animate-fade-in">

@@ -24,9 +24,10 @@ interface OnlineGameProps {
     initialRoomId: string | null;
     isDebugMenuOpen: boolean;
     closeDebugMenu: () => void;
+    isKonamiActive: boolean;
 }
 
-export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExit, initialRoomId, isDebugMenuOpen, closeDebugMenu }, ref) => {
+export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExit, initialRoomId, isDebugMenuOpen, closeDebugMenu, isKonamiActive }, ref) => {
     const [localPlayerId, setLocalPlayerId] = useState<string | null>(null);
     const [gameState, setGameState] = useState<GameState | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -197,12 +198,23 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     }, []);
 
     const updateGameState = useCallback((newState: Partial<GameState>) => {
+        console.log('updateGameState called with:', newState);
         if (isHost && gameState?.roomId) {
             db.ref(`rooms/${gameState.roomId}`).transaction((currentState) => {
+                console.log('Transaction: current state', currentState);
                 if (currentState) {
-                    return { ...currentState, ...newState };
+                    const updatedState = { ...currentState, ...newState };
+                    console.log('Transaction: updated state', updatedState);
+                    return updatedState;
                 }
+                console.log('Transaction: no current state, returning null');
                 return currentState;
+            }).then(result => {
+                if (result.committed) {
+                    console.log('Transaction committed successfully. New state:', result.snapshot.val());
+                } else {
+                    console.log('Transaction aborted or not committed.');
+                }
             }).catch(e => console.error("Update game state failed:", e));
         }
     }, [isHost, gameState?.roomId]);
@@ -693,8 +705,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     onTransferHost={handleTransferHost}
                 />;
             case 'ANSWERING': return <AnsweringScreen player={localPlayer} players={activePlayers} question={gameState.currentQuestion!} answers={gameState.answers} onSubmit={handleAnswerSubmit} timerEnd={gameState.answerTimerEnd} isLocalMode={false} isHost={isHost} noTimer={gameState.noTimer} onForceEndAnswering={() => updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: gameState.noTimer ? null : Date.now() + activePlayers.length * 10000 })} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={gameState.showQuestionToSpy} />;
-            case 'RESULTS_DISCUSSION': return <ResultsDiscussionScreen question={gameState.currentQuestion!} players={playerList} answers={gameState.answers} onVote={handleVoteSubmit} onTally={handleVoteTally} votingEnabled={gameState.votingEnabled} localPlayerId={localPlayerId} votes={gameState.votes} timerEnd={gameState.voteTimerEnd} isHost={isHost} isLocalMode={false} noTimer={gameState.noTimer} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={gameState.showQuestionToSpy} />;
-            case 'VOTE_REVEAL': return <VoteRevealScreen eliminatedPlayer={gameState.lastEliminated} votes={gameState.votes} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={gameState.anonymousVoting} />;
+            case 'RESULTS_DISCUSSION': return <ResultsDiscussionScreen question={gameState.currentQuestion!} players={playerList} answers={gameState.answers} onVote={handleVoteSubmit} onTally={handleVoteTally} votingEnabled={gameState.votingEnabled} localPlayerId={localPlayerId} votes={gameState.votes} timerEnd={gameState.voteTimerEnd} isHost={isHost} isLocalMode={false} noTimer={gameState.noTimer} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={gameState.showQuestionToSpy} revealVotes={isKonamiActive} />;
+            case 'VOTE_REVEAL': return <VoteRevealScreen eliminatedPlayer={gameState.lastEliminated} votes={gameState.votes} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={gameState.anonymousVoting} revealSpies={isKonamiActive} />;
             case 'GAME_OVER': return <GameOverScreen winner={gameState.winner!} players={playerList} onNewGame={() => handleLeaveRoom(true)} onReplay={handleReplay} isHost={isHost} isLocalMode={false} />;
             default: return <div>Загрузка...</div>;
         }
