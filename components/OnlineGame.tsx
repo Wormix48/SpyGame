@@ -12,6 +12,7 @@ import { generateId, checkWinConditions, generateNewQuestion } from '../utils';
 import { Chat } from './Chat';
 import { db } from '../firebase';
 import firebase from 'firebase/app';
+import 'firebase/auth';
 import { DebugMenu } from './DebugMenu';
 import { NextRoundSyncScreen } from './NextRoundSyncScreen';
 
@@ -35,6 +36,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const [isLoading, setIsLoading] = useState(false);
     const [rememberedRoomId, setRememberedRoomId] = useState<string | null>(initialRoomId);
     const [forcedSpies, setForcedSpies] = useState<Set<string>>(new Set());
+    const [isAuthReady, setIsAuthReady] = useState(false);
 
     const isExitingRef = useRef(false);
     const gameStateUnsubscribeRef = useRef<(() => void) | null>(null);
@@ -120,6 +122,16 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     }, []);
 
     // Manages connection status for the current player
+    useEffect(() => {
+        const unsubscribe = firebase.auth().onAuthStateChanged(user => {
+            if (user) {
+                setLocalPlayerId(user.uid);
+            }
+            setIsAuthReady(true);
+        });
+        return () => unsubscribe();
+    }, []);
+
     useEffect(() => {
         if (gameState?.roomId && localPlayerId) {
             const playerRef = db.ref(`rooms/${gameState.roomId}/players/${localPlayerId}`);
@@ -247,7 +259,12 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         }
         // --- End Cleanup ---
 
-        const playerId = generateId();
+        const playerId = firebase.auth().currentUser?.uid;
+        if (!playerId) {
+            setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
+            setIsLoading(false);
+            return;
+        }
         const roomId = generateId();
 
         const hostPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: true, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any };
@@ -303,7 +320,12 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             const disconnectedPlayer = players.find(p => p.name === playerName && p.connectionStatus === 'disconnected');
     
             if (disconnectedPlayer) {
-                const playerId = disconnectedPlayer.id;
+                const playerId = firebase.auth().currentUser?.uid;
+                if (!playerId) {
+                    setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
+                    setIsLoading(false);
+                    return;
+                }
     
                 const updates: { [key: string]: any } = {};
                 if (disconnectedPlayer.avatar !== avatar) {
@@ -334,7 +356,12 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 return;
             }
     
-            const playerId = generateId();
+            const playerId = firebase.auth().currentUser?.uid;
+            if (!playerId) {
+                setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
+                setIsLoading(false);
+                return;
+            }
             const newPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any };
             const playerRef = db.ref(`rooms/${upperRoomId}/players/${playerId}`);
             await playerRef.set(newPlayer);
@@ -684,7 +711,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         }
     }, [isHost, gameState, handleContinueToNextRound]);
 
-    if (isLoading) return <LoadingScreen title="Подключение..." />;
+    if (isLoading || !isAuthReady) return <LoadingScreen title="Подключение..." />;
     if (error) return <div className="flex flex-col items-center justify-center text-center min-h-[450px]"><h2 className="text-3xl font-bold text-red-500 mb-4">Ошибка</h2><p className="text-slate-300 mb-8">{error}</p><button onClick={() => handleLeaveRoom(true)} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded-lg text-xl">Вернуться в меню</button></div>;
     if (!gameState || !localPlayerId) return <LobbyScreen onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} initialRoomId={rememberedRoomId} />;
 
