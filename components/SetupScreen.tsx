@@ -21,11 +21,12 @@ interface SetupScreenProps {
   onSettingsChange: (settings: { spyCount?: number, questionSource?: QuestionSource, familyFriendly?: boolean, noTimer?: boolean, roundLimit?: boolean, showQuestionToSpy?: boolean, anonymousVoting?: boolean }) => void;
   onKickPlayer: (playerId: string) => void;
   onTransferHost: (playerId: string) => void;
+  forcedSpies: Set<string>;
 }
 
 const SETTINGS_KEY = 'spy-game-online-settings';
 
-export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, isHost, roomId, initialSettings, onSettingsChange, onKickPlayer, onTransferHost }) => {
+export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, isHost, roomId, initialSettings, onSettingsChange, onKickPlayer, onTransferHost, forcedSpies }) => {
   const [copyButtonText, setCopyButtonText] = useState('Копировать ссылку-приглашение');
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   
@@ -263,7 +264,8 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
                         <div className="flex items-center gap-3 truncate">
                             <Avatar avatar={p.avatar} className="w-8 h-8 flex-shrink-0" />
                             <span className="truncate flex items-center gap-2">
-                                {p.name} {p.isHost && '👑'}
+                                <span className="player-name-reveal-spy" data-is-spy={isHost && forcedSpies.has(p.id)}>{p.name}</span>
+                                {p.isHost && '👑'}
                                 {p.connectionStatus === 'disconnected' && <WarningIcon className="w-4 h-4 text-yellow-400" title="Игрок отключился"/>}
                             </span>
                         </div>

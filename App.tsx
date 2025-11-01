@@ -1,14 +1,14 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { GameModeScreen } from './components/GameModeScreen';
 import { LocalGame } from './components/LocalGame';
-import { OnlineGame } from './components/OnlineGame';
+import { OnlineGame, OnlineGameHandle } from './components/OnlineGame';
 import { HelpTooltip } from './components/HelpTooltip';
 
 const App: React.FC = () => {
   const [gameMode, setGameMode] = useState<'online' | 'local' | null>(null);
   const [initialRoomId, setInitialRoomId] = useState<string | null>(null);
   const [isDebugMenuOpen, setIsDebugMenuOpen] = useState(false);
-  const onlineGameRef = useRef<{ cleanup: () => void } | null>(null);
+  const onlineGameRef = useRef<OnlineGameHandle | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -19,19 +19,46 @@ const App: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const code = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight'];
+    let keySequence: string[] = [];
+
+    const handler = (e: KeyboardEvent) => {
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+            return;
+        }
+
+        keySequence.push(e.key);
+        keySequence = keySequence.slice(-code.length);
+
+        if (keySequence.join('') === code.join('')) {
+            document.body.classList.toggle('spy-reveal-mode');
+            keySequence = []; // Reset
+        }
+    };
+    
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   const handleNewGame = useCallback(() => {
-    // Clear the URL query string to avoid re-joining the same room on refresh
+    // If we are in online mode, trigger the cleanup function before resetting the app state
+    if (gameMode === 'online' && onlineGameRef.current) {
+        onlineGameRef.current.cleanup();
+    }
+
+    // Reset the app state to go back to the main menu
     if (window.location.search) {
-      window.history.pushState({}, document.title, window.location.pathname);
+        window.history.pushState({}, document.title, window.location.pathname);
     }
     setGameMode(null);
     setInitialRoomId(null);
-  }, []);
+  }, [gameMode]);
 
   const renderGame = () => {
     switch(gameMode) {
       case 'online':
-        return <OnlineGame onExit={handleNewGame} initialRoomId={initialRoomId} isDebugMenuOpen={isDebugMenuOpen} closeDebugMenu={() => setIsDebugMenuOpen(false)} />;
+        return <OnlineGame ref={onlineGameRef} onExit={handleNewGame} initialRoomId={initialRoomId} isDebugMenuOpen={isDebugMenuOpen} closeDebugMenu={() => setIsDebugMenuOpen(false)} />;
       case 'local':
         return <LocalGame onExit={handleNewGame} />;
       default:
@@ -47,7 +74,7 @@ const App: React.FC = () => {
         </div>
         
         <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-cyan-400 tracking-wider text-center px-2 whitespace-nowrap">
-          НАЙДИ ШПИОНА
+          ИГРА В ШПИОНА
         </h1>
       </header>
       
@@ -68,9 +95,9 @@ const App: React.FC = () => {
       </div>
       
       <div className="absolute bottom-4 right-4 flex items-center gap-4">
-        <button onClick={() => setIsDebugMenuOpen(p => !p)} className="text-slate-500 text-xs focus:outline-none" aria-label="Открыть меню отладки">
-            v2.3.0
-        </button>
+        <div onDoubleClick={() => setIsDebugMenuOpen(p => !p)} className="text-slate-500 text-xs focus:outline-none cursor-default select-none" aria-label="Открыть меню отладки (двойной клик)">
+            v2.5.0
+        </div>
       </div>
     </main>
   );

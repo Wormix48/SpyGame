@@ -28,7 +28,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, players,
             {survivors.map(player => (
               <div key={player.id} className="flex items-center gap-3 bg-slate-900/50 p-2 rounded-md">
                 <Avatar avatar={player.avatar} className="w-8 h-8" />
-                <span className="text-lg font-semibold text-white truncate">{player.name}</span>
+                <span className="text-lg font-semibold text-white truncate player-name-reveal-spy" data-is-spy={player.isSpy}>{player.name}</span>
               </div>
             ))}
           </div>
@@ -47,7 +47,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, players,
               {spies.length > 0 ? spies.map(spy => (
                 <div key={spy.id} className="flex items-center gap-3 bg-slate-900/50 p-2 rounded-md">
                   <Avatar avatar={spy.avatar} className="w-8 h-8" />
-                  <span className="text-lg font-semibold text-white truncate">{spy.name}</span>
+                  <span className="text-lg font-semibold text-white truncate player-name-reveal-spy" data-is-spy={spy.isSpy}>{spy.name}</span>
                 </div>
               )) : <p className="text-slate-400 text-center">Шпионов не было в этой игре.</p>}
             </div>
@@ -81,7 +81,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, players,
                 onClick={() => onReplay()}
                 className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-4 px-8 rounded-lg text-xl transition-all duration-200 transform hover:scale-105"
              >
-                Сыграть реванш
+                {isLocalMode ? 'Изменить настройки' : 'Вернуться в лобби'}
              </button>
          )}
          <button

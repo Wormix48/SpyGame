@@ -116,7 +116,7 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
                             return (
                                 <div key={p.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${pHasAnswered ? 'bg-green-500/80 text-white' : 'bg-slate-600 text-slate-300'}`}>
                                     <Avatar avatar={p.avatar} className="w-5 h-5" />
-                                    <span className="font-semibold">{p.name}</span>
+                                    <span className="font-semibold player-name-reveal-spy" data-is-spy={p.isSpy}>{p.name}</span>
                                     {pHasAnswered && '✓'}
                                     {p.connectionStatus === 'disconnected' && <WarningIcon className="w-4 h-4 text-yellow-400" title="Игрок отключился" />}
                                 </div>
@@ -142,8 +142,8 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
               <CheckIcon className="w-24 h-24 text-green-500" />
               <h2 className="text-3xl font-bold text-white mt-4">Ответ принят!</h2>
               {player.isSpy && showQuestionToSpy && (
-                  <div className="bg-green-900/50 p-4 rounded-lg mt-6 border border-green-500 w-full max-w-lg text-center animate-fade-in">
-                      <p className="text-lg font-bold text-green-300">ВОПРОС БЫЛ:</p>
+                  <div className="bg-slate-900/50 p-4 rounded-lg mt-6 border border-cyan-500 w-full max-w-lg text-center animate-fade-in">
+                      <p className="text-lg font-bold text-cyan-300">ВОПРОС БЫЛ:</p>
                       <p className="text-xl text-white">{question.text}</p>
                   </div>
               )}
@@ -165,6 +165,12 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
                           <CheckIcon className="w-24 h-24 text-green-500" />
                           <h2 className="text-3xl font-bold text-white mt-4">Ответ принят!</h2>
                           <p className="text-slate-300 mt-2">Ожидаем ответов от других игроков...</p>
+                          {player.isSpy && showQuestionToSpy && (
+                              <div className="bg-slate-900/50 p-4 rounded-lg mt-6 border border-cyan-500 w-full max-w-lg text-center animate-fade-in">
+                                  <p className="text-lg font-bold text-cyan-300">ВОПРОС БЫЛ:</p>
+                                  <p className="text-xl text-white">{question.text}</p>
+                              </div>
+                          )}
                       </>
                   )}
               </div>
@@ -220,7 +226,7 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
                     return (
                         <div key={p.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-300 ${pHasAnswered ? 'bg-green-500/80 text-white' : 'bg-slate-600 text-slate-300'}`}>
                             <Avatar avatar={p.avatar} className="w-5 h-5" />
-                            <span className="font-semibold">{p.name}</span>
+                            <span className="font-semibold player-name-reveal-spy" data-is-spy={p.isSpy}>{p.name}</span>
                             {pHasAnswered && '✓'}
                             {p.connectionStatus === 'disconnected' && <WarningIcon className="w-4 h-4 text-yellow-400" title="Игрок отключился" />}
                             {isHost && !p.isHost && (

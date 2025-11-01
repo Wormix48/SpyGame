@@ -204,36 +204,10 @@ export const LocalGame: React.FC<LocalGameProps> = ({ onExit }) => {
     }, [gameState, startNewRound, playerList.length]);
 
     const handleReplay = useCallback(() => {
-        if (!gameState) return;
-        // FIX: Added missing isHost property to player objects to match the Player type.
-        // FIX: Explicitly type player `p` to resolve properties on type 'unknown'.
-        const originalPlayers: Player[] = Object.values(gameState.players).map((p: Player) => ({ id: p.id, name: p.name, avatar: p.avatar, isEliminated: false, isSpy: false, isHost: false }));
-        
-        const playersToShuffle = [...originalPlayers];
-        for (let i = playersToShuffle.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [playersToShuffle[i], playersToShuffle[j]] = [playersToShuffle[j], playersToShuffle[i]];
-        }
-        
-        const spyIds = new Set(playersToShuffle.slice(0, gameState.initialSpyCount).map(p => p.id));
-        
-        const newPlayers = originalPlayers.map(player => ({
-            ...player,
-            isSpy: spyIds.has(player.id)
-        }));
-
-        const newPlayersObject = newPlayers.reduce((acc, p) => {
-            acc[p.id] = p;
-            return acc;
-        }, {} as Record<string, Player>);
-
-        setGameState({
-            ...gameState, players: newPlayersObject, round: 1, usedQuestionIds: [], usedQuestionTexts: [],
-            currentQuestion: null, answers: [], votes: [], lastEliminated: null, winner: null, gamePhase: 'ROLE_REVEAL',
-        });
-        setLocalPlayerIndex(0);
-        setLocalTurnPhase('PASS_DEVICE');
-    }, [gameState]);
+        // This will unmount the game and mount the setup screen, 
+        // which will load the last used player list from localStorage.
+        setGameState(null);
+    }, []);
 
     if (isGenerating) {
         const title = gameState?.questionSource === 'ai' ? "ИИ генерирует вопрос..." : "Подбираем вопрос...";

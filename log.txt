@@ -1,0 +1,4 @@
+Снова на клоудфлайер всё работает а на файрбейс
+Uncaught SyntaxError: "undefined" is not valid JSON
+    at JSON.parse (<anonymous>)
+    at index-DR2rOnx9.js:1844:685

@@ -140,7 +140,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                     <div key={player.id} className="flex items-center justify-between bg-slate-700 p-4 rounded-lg gap-4">
                         <div className="flex items-center gap-3 flex-shrink-0">
                            <Avatar avatar={player.avatar} className="w-8 h-8" />
-                           <span className="text-xl font-bold text-white">{player.name}</span>
+                           <span className="text-xl font-bold text-white player-name-reveal-spy" data-is-spy={player.isSpy}>{player.name}</span>
                         </div>
                         <span className="text-xl font-medium text-cyan-300 bg-slate-800 px-3 py-1 rounded text-right flex-grow truncate">{getAnswerForPlayer(player.id)}</span>
                     </div>
@@ -167,7 +167,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                 <div className="w-full max-w-lg">
                     <h3 className="text-xl text-white font-semibold text-center mb-2">Кто шпион?</h3>
                     <div className="mb-4 bg-slate-700 p-3 rounded-lg">
-                        <p className="font-bold text-lg text-center mb-2">{localSequentialVoter.name} голосует за:</p>
+                        <p className="font-bold text-lg text-center mb-2 player-name-reveal-spy" data-is-spy={localSequentialVoter.isSpy}>{localSequentialVoter.name} голосует за:</p>
                         <div className="flex justify-center flex-wrap gap-2">
                             {activePlayers.filter(p => p.id !== localSequentialVoter.id).map(votedFor => (
                                 <button
@@ -175,7 +175,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                                     onClick={() => onFinishLocalSequentialVote({ voterId: localSequentialVoter.id, votedForId: votedFor.id })}
                                     className="px-4 py-2 rounded-lg font-semibold transition-colors bg-slate-600 hover:bg-red-700 text-white text-lg"
                                 >
-                                    {votedFor.name}
+                                    <span className="player-name-reveal-spy" data-is-spy={votedFor.isSpy}>{votedFor.name}</span>
                                 </button>
                             ))}
                              <button
@@ -203,7 +203,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                     <h3 className="text-xl text-white font-semibold text-center mb-2">Кто шпион?</h3>
                     {activePlayers.map(voter => (
                         <div key={voter.id} className="mb-4 bg-slate-700 p-3 rounded-lg">
-                            <p className="font-bold text-lg text-center mb-2">{voter.name} голосует за:</p>
+                            <p className="font-bold text-lg text-center mb-2 player-name-reveal-spy" data-is-spy={voter.isSpy}>{voter.name} голосует за:</p>
                             <div className="flex justify-center flex-wrap gap-2">
                                 {activePlayers.filter(p => p.id !== voter.id).map(votedFor => (
                                     <button
@@ -212,7 +212,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                                         className={`px-3 py-1 rounded font-semibold transition-colors
                                             ${localVotes[voter.id] === votedFor.id ? 'bg-red-600 text-white' : 'bg-slate-600 hover:bg-red-700 text-white'}`}
                                     >
-                                        {votedFor.name}
+                                        <span className="player-name-reveal-spy" data-is-spy={votedFor.isSpy}>{votedFor.name}</span>
                                     </button>
                                 ))}
                                 <button
@@ -263,7 +263,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                 <div className="flex items-center gap-3 flex-shrink-0">
                     <Avatar avatar={player.avatar} className="w-8 h-8" />
                     <span className="text-xl font-bold text-white flex items-center gap-2">
-                        {player.name}
+                        <span className="player-name-reveal-spy" data-is-spy={player.isSpy}>{player.name}</span>
                         {votingEnabled && (
                             <div title={hasVoted(player.id) ? "Проголосовал(а)" : "Голосует..."}>
                                 {hasVoted(player.id) ? (
@@ -310,7 +310,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                             ${player.connectionStatus === 'disconnected' ? 'opacity-50' : ''}`}
                     >
                         <Avatar avatar={player.avatar} className="w-8 h-8" />
-                        <span className="flex-grow">{player.name}</span>
+                        <span className="flex-grow player-name-reveal-spy" data-is-spy={player.isSpy}>{player.name}</span>
                          <div className="flex items-center gap-2">
                             {player.connectionStatus === 'disconnected' && <WarningIcon className="w-5 h-5 text-yellow-400" title="Игрок отключился" />}
                         </div>
