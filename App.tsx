@@ -69,7 +69,7 @@ const App: React.FC = () => {
       
       <div className="absolute bottom-4 right-4 flex items-center gap-4">
         <button onClick={() => setIsDebugMenuOpen(p => !p)} className="text-slate-500 text-xs focus:outline-none" aria-label="Открыть меню отладки">
-            v2.1.0
+            v2.3.0
         </button>
       </div>
     </main>
