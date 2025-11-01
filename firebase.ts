@@ -7,3 +7,4 @@ const firebaseConfig = JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG);
 
 const app = firebase.initializeApp(firebaseConfig);
 export const db = firebase.database();
+export { firebase };

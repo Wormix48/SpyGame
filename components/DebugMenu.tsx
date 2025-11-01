@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { GameState, Player, Answer, Vote, ChatMessage } from '../types';
-import { db } from '../firebase';
+import { db, firebase } from '../firebase';
 import { generateId } from '../utils';
 import { Avatar } from './Avatar';
 
