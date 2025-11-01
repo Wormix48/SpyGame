@@ -674,6 +674,14 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const handleReplay = () => {
         if (!isHost || !gameState) return;
         const newPlayers = { ...gameState.players };
+        
+        // Filter out disconnected players before resetting
+        Object.keys(newPlayers).forEach(id => {
+            if (newPlayers[id].connectionStatus === 'disconnected') {
+                delete newPlayers[id];
+            }
+        });
+
         Object.keys(newPlayers).forEach(id => {
             newPlayers[id] = { 
                 ...newPlayers[id], 
