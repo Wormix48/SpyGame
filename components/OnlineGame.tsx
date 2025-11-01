@@ -671,7 +671,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         startNewRound(nextRoundState);
     }, [isHost, gameState, startNewRound]);
 
-    const handleReplay = () => {
+    const handleReplay = async () => {
         if (!isHost || !gameState) return;
         const newPlayers = { ...gameState.players };
         
@@ -692,7 +692,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             };
         });
         
-        updateGameState({ 
+        await updateGameState({ 
             players: newPlayers, 
             round: 1, 
             usedQuestionIds: [], 
