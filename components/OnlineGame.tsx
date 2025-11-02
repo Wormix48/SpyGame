@@ -222,17 +222,24 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     return currentRoomState;
                 }
                 const isLeavingPlayerHost = currentRoomState.hostId === currentLocalPlayerId;
-                delete currentRoomState.players[currentLocalPlayerId];
-                const remainingPlayers = Object.values(currentRoomState.players);
+                
+                // Mark player as disconnected instead of deleting them
+                currentRoomState.players[currentLocalPlayerId].connectionStatus = 'disconnected';
 
-                if (remainingPlayers.length === 0) return null;
+                const remainingConnectedPlayers = Object.values(currentRoomState.players).filter(p => p.connectionStatus === 'connected');
+
+                // If no players remain at all (shouldn't happen with this logic, but for safety)
+                if (Object.values(currentRoomState.players).length === 0) return null;
 
                 if (isLeavingPlayerHost) {
-                    const nextHost = remainingPlayers.sort((a: Player, b: Player) => (a.joinTimestamp || 0) - (b.joinTimestamp || 0))[0];
-                    currentRoomState.hostId = nextHost.id;
-                    if (currentRoomState.players[nextHost.id]) {
+                    // Only migrate host if there is a connected player to take over
+                    if (remainingConnectedPlayers.length > 0) {
+                        const nextHost = remainingConnectedPlayers.sort((a: Player, b: Player) => (a.joinTimestamp || 0) - (b.joinTimestamp || 0))[0];
+                        currentRoomState.hostId = nextHost.id;
                         currentRoomState.players[nextHost.id].isHost = true;
+                        currentRoomState.players[currentLocalPlayerId].isHost = false; // Old host is no longer host
                     }
+                    // If no connected players, the host remains disconnected, and the room stays.
                 }
                 return currentRoomState;
             }).catch(e => console.error("Failed to leave room", e));
@@ -292,11 +299,11 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     const updates: { [key: string]: null } = {};
                     for (const roomId in allRooms) {
                         const room = allRooms[roomId];
-                        // Check if there are any connected players in the room
-                        const connectedPlayers = room.players ? Object.values(room.players).filter((p: Player) => p.connectionStatus === 'connected') : [];
+                        // Check if there are any players in the room who are NOT disconnected
+                        const activePlayers = room.players ? Object.values(room.players).filter((p: Player) => p.connectionStatus !== 'disconnected') : [];
 
-                        // Remove rooms with no connected players
-                        if (connectedPlayers.length === 0) {
+                        // Remove rooms with no active (connected) players
+                        if (activePlayers.length === 0) {
                             updates[`/rooms/${roomId}`] = null;
                         }
                     }
@@ -675,12 +682,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         if (!isHost || !gameState) return;
         const newPlayers = { ...gameState.players };
         
-        // Filter out disconnected players before resetting
-        Object.keys(newPlayers).forEach(id => {
-            if (newPlayers[id].connectionStatus === 'disconnected') {
-                delete newPlayers[id];
-            }
-        });
+        // Do not filter out disconnected players here, as they should be able to rejoin the new game.
+        // The cleanup logic in handleCreateRoom will handle truly dead rooms.
 
         Object.keys(newPlayers).forEach(id => {
             newPlayers[id] = { 
