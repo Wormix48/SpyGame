@@ -100,6 +100,8 @@ export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPl
                                         <Avatar avatar={votedFor.avatar} className="w-6 h-6 flex-shrink-0" />
                                     </span>
                                 </>
+                            ) : vote.votedForId ? (
+                                <span className="font-bold text-red-400 col-span-2 text-center">удален(а)</span>
                             ) : (
                                 <span className="font-bold text-slate-400 col-span-2 text-center">пропустил(а)</span>
                             )}

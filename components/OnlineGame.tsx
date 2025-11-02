@@ -478,7 +478,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
     
             // --- New Player Join Logic ---
-            if (playersInRoomList.some(p => p.name === playerName)) {
+            // Allow joining if the name is taken by the same user (who is stuck as 'connected')
+            if (playersInRoomList.some(p => p.name === playerName && p.firebaseAuthUid !== firebaseAuthUid)) {
                 setError('Игрок с таким именем уже в комнате.');
                 return;
             }
@@ -878,7 +879,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 />;
             case 'ANSWERING': return <AnsweringScreen player={localPlayer} players={activePlayers} question={publicGameState.currentQuestion!} answers={publicGameState.answers as Answer[]} onSubmit={handleAnswerSubmit} timerEnd={publicGameState.answerTimerEnd} isLocalMode={false} isHost={isHost} noTimer={publicGameState.noTimer} onForceEndAnswering={() => updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: publicGameState.noTimer ? null : Date.now() + activePlayers.length * 10000 })} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={publicGameState.showQuestionToSpy} hideAnswerStatus={publicGameState.hideAnswerStatus} />;
             case 'RESULTS_DISCUSSION': return <ResultsDiscussionScreen question={publicGameState.currentQuestion!} players={playerList} answers={(publicGameState.answers ?? []) as Answer[]} onVote={handleVoteSubmit} onTally={handleVoteTally} votingEnabled={publicGameState.votingEnabled} localPlayerId={localPlayerId} votes={(publicGameState.votes ?? []) as Vote[]} timerEnd={publicGameState.voteTimerEnd} isHost={isHost} isLocalMode={false} noTimer={publicGameState.noTimer} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={publicGameState.showQuestionToSpy} revealVotes={isKonamiActive} />;
-            case 'VOTE_REVEAL': return <VoteRevealScreen eliminatedPlayer={publicGameState.lastEliminated} votes={publicGameState.votes as Vote[]} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={publicGameState.anonymousVoting} revealSpies={isKonamiActive} />;
+            case 'VOTE_REVEAL': return <VoteRevealScreen eliminatedPlayer={publicGameState.lastEliminated} votes={(publicGameState.votes ?? []) as Vote[]} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={publicGameState.anonymousVoting} revealSpies={isKonamiActive} />;
             case 'GAME_OVER': return <GameOverScreen winner={publicGameState.winner!} players={playerList} onNewGame={() => handleLeaveRoom(true)} onReplay={handleReplay} isHost={isHost} isLocalMode={false} />;
             default: return <div>Загрузка...</div>;
         }
@@ -886,8 +887,14 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     
     return (
         <>
-            {localPlayer && (publicGameState.gamePhase === 'SETUP' || publicGameState.gamePhase === 'ROLE_REVEAL' || !localPlayer.isEliminated) && (
-                <Chat localPlayer={localPlayer} messages={memoizedChatMessages} onSendMessage={handleSendMessage} onChatOpen={handleChatOpen} />
+            {localPlayer && publicGameState.gamePhase !== 'GAME_OVER' && (
+                <Chat 
+                    localPlayer={localPlayer} 
+                    messages={memoizedChatMessages} 
+                    onSendMessage={handleSendMessage} 
+                    onChatOpen={handleChatOpen} 
+                    isEliminated={localPlayer.isEliminated}
+                />
             )}
             {renderGameScreen()}
             {isDebugMenuOpen && combinedGameState && <DebugMenu gameState={combinedGameState} onClose={closeDebugMenu} forcedSpies={forcedSpies} onToggleForceSpy={handleToggleForceSpy} isHost={isHost} />}

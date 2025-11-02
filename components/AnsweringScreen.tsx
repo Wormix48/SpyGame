@@ -156,27 +156,47 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
 
               
 
-              {player.isSpy ? (
+                            {player && player.isSpy ? (
 
-                  <div className="bg-red-900/50 p-4 rounded-lg my-4 border border-red-500 w-full">
+              
 
-                      <p className="text-lg font-bold text-red-300">ВЫ БЫЛИ ШПИОНОМ</p>
+                                <div className="bg-red-900/50 p-4 rounded-lg my-4 border border-red-500 w-full">
 
-                      <p className="text-slate-300">Вопрос скрыт.</p>
+              
 
-                  </div>
+                                    <p className="text-lg font-bold text-red-300">ВЫ БЫЛИ ШПИОНОМ</p>
 
-              ) : (
+              
 
-                  <div className="bg-green-900/50 p-4 rounded-lg my-4 border border-green-500 w-full">
+                                    <p className="text-slate-300">Вопрос скрыт.</p>
 
-                      <p className="text-lg font-bold text-green-300">ВОПРОС:</p>
+              
 
-                      <p className="text-xl text-white">{question.text}</p>
+                                </div>
 
-                  </div>
+              
 
-              )}
+                            ) : (
+
+              
+
+                                <div className="bg-green-900/50 p-4 rounded-lg my-4 border border-green-500 w-full">
+
+              
+
+                                    <p className="text-lg font-bold text-green-300">ВОПРОС:</p>
+
+              
+
+                                    <p className="text-xl text-white">{question.text}</p>
+
+              
+
+                                </div>
+
+              
+
+                            )}
 
   
 
@@ -212,15 +232,31 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
 
                           })}
 
-                      </div>
+                                            </div>
 
-                  </div>
+                                        </div>
 
-              )}
+                                    )}
 
-          </div>
+                                    
 
-      );
+                                    {isHost && !isLocalMode && (
+
+                                        <div className="text-center mt-4 w-full">
+
+                                            <button onClick={() => onForceEndAnswering?.()} className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 transform hover:scale-105">
+
+                                                {noTimer ? 'Завершить прием ответов' : 'Завершить досрочно'}
+
+                                            </button>
+
+                                        </div>
+
+                                    )}
+
+                                </div>
+
+                            );
 
     }
 

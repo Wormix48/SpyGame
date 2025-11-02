@@ -359,16 +359,18 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
         </div>
 
         {/* Дополнительные кнопки голосования (отдельный блок) */}
-        {votingEnabled && !isSpectator && (
+        {votingEnabled && (
           <div className="w-full max-w-md flex flex-col gap-3 mt-6">
-              <button
-                  onClick={() => onVote(null)}
-                  disabled={localPlayerHasVoted}
-                  className={`w-full text-center text-lg font-semibold p-4 rounded-lg transition-all duration-200
-                      ${localPlayerHasVoted ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-500 text-white'}`}
-              >
-                  Пропустить голосование
-              </button>
+              {!isSpectator && (
+                  <button
+                      onClick={() => onVote(null)}
+                      disabled={localPlayerHasVoted}
+                      className={`w-full text-center text-lg font-semibold p-4 rounded-lg transition-all duration-200
+                          ${localPlayerHasVoted ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-500 text-white'}`}
+                  >
+                      Пропустить голосование
+                  </button>
+              )}
               {isHost && (
                   <button
                       onClick={onTally}

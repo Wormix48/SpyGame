@@ -8,6 +8,7 @@ interface ChatProps {
     messages: ChatMessage[];
     onSendMessage: (message: string) => void;
     onChatOpen: () => void;
+    isEliminated: boolean;
 }
 
 const MessageStatus: React.FC<{ status?: 'sending' | 'sent' | 'read' }> = ({ status }) => {
@@ -23,7 +24,7 @@ const MessageStatus: React.FC<{ status?: 'sending' | 'sent' | 'read' }> = ({ sta
     return null;
 };
 
-export const Chat: React.FC<ChatProps> = ({ localPlayer, messages, onSendMessage, onChatOpen }) => {
+export const Chat: React.FC<ChatProps> = ({ localPlayer, messages, onSendMessage, onChatOpen, isEliminated }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [newMessage, setNewMessage] = useState('');
     const [unreadCount, setUnreadCount] = useState(0);
@@ -98,11 +99,12 @@ export const Chat: React.FC<ChatProps> = ({ localPlayer, messages, onSendMessage
                             type="text"
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
-                            className="w-full bg-slate-700 text-white p-2 rounded-lg border-2 border-slate-600 focus:border-cyan-500 focus:outline-none text-sm"
-                            placeholder="Написать сообщение..."
+                            className={`w-full p-2 rounded-lg border-2 focus:outline-none text-sm ${isEliminated ? 'bg-slate-800 text-slate-500 border-slate-700 cursor-not-allowed' : 'bg-slate-700 text-white border-slate-600 focus:border-cyan-500'}`}
+                            placeholder={isEliminated ? "Вы выбыли и не можете писать" : "Написать сообщение..."}
                             maxLength={100}
+                            disabled={isEliminated}
                         />
-                        <button type="submit" className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold p-2 rounded-lg transition-colors">Отпр.</button>
+                        <button type="submit" disabled={isEliminated} className={`font-bold p-2 rounded-lg transition-colors ${isEliminated ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-cyan-500 hover:bg-cyan-400 text-slate-900'}`}>Отпр.</button>
                     </form>
                 </div>
             ) : (
