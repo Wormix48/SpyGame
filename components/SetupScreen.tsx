@@ -17,8 +17,9 @@ interface SetupScreenProps {
     roundLimit: boolean;
     showQuestionToSpy: boolean;
     anonymousVoting: boolean;
+    hideAnswerStatus: boolean;
   };
-  onSettingsChange: (settings: { spyCount?: number, questionSource?: QuestionSource, familyFriendly?: boolean, noTimer?: boolean, roundLimit?: boolean, showQuestionToSpy?: boolean, anonymousVoting?: boolean }) => void;
+  onSettingsChange: (settings: { spyCount?: number, questionSource?: QuestionSource, familyFriendly?: boolean, noTimer?: boolean, roundLimit?: boolean, showQuestionToSpy?: boolean, anonymousVoting?: boolean, hideAnswerStatus?: boolean }) => void;
   onKickPlayer: (playerId: string) => void;
   onTransferHost: (playerId: string) => void;
   forcedSpies: Set<string>;
@@ -46,6 +47,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
           roundLimit: saved.roundLimit ?? initialSettings.roundLimit,
           showQuestionToSpy: saved.showQuestionToSpy ?? initialSettings.showQuestionToSpy,
           anonymousVoting: saved.anonymousVoting ?? initialSettings.anonymousVoting,
+          hideAnswerStatus: saved.hideAnswerStatus ?? initialSettings.hideAnswerStatus,
         });
       }
     } catch (e) {
@@ -150,6 +152,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
                         <div className="flex justify-between"><span>Лимит раундов:</span> <span className="font-bold text-white">{initialSettings.roundLimit ? 'Вкл' : 'Выкл'}</span></div>
                         <div className="flex justify-between"><span>Показ вопроса шпиону:</span> <span className="font-bold text-white">{initialSettings.showQuestionToSpy ? 'Вкл' : 'Выкл'}</span></div>
                         <div className="flex justify-between"><span>Анонимное голосование:</span> <span className="font-bold text-white">{initialSettings.anonymousVoting ? 'Вкл' : 'Выкл'}</span></div>
+                        <div className="flex justify-between"><span>Скрыть статус ответов:</span> <span className="font-bold text-white">{initialSettings.hideAnswerStatus ? 'Вкл' : 'Выкл'}</span></div>
                     </div>
                 </div>
               </div>
@@ -252,6 +255,15 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
                     </div>
                 </label>
             </div>
+            <div>
+                <label className="flex items-center justify-between text-lg font-medium text-slate-300 cursor-pointer">
+                    <span>Скрыть статус ответов</span>
+                    <div className="relative inline-flex items-center">
+                    <input type="checkbox" checked={initialSettings.hideAnswerStatus} onChange={() => onSettingsChange({ hideAnswerStatus: !initialSettings.hideAnswerStatus })} className="sr-only peer" />
+                    <div className="w-11 h-6 bg-slate-600 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                    </div>
+                </label>
+            </div>
             <button 
               type="submit" 
               disabled={playerCount < 3}
@@ -261,9 +273,9 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
             </button>
             {playerCount < 3 && <p className="text-sm text-yellow-400">Нужно как минимум 3 игрока для начала.</p>}
         </form>
-        <div className="w-full md:w-1/2">
+        <div className="w-full md:w-1/2 flex flex-col">
             <h3 className="text-xl font-semibold mb-4 text-white">Игроки ({players.length}):</h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto bg-slate-900/50 p-3 rounded-lg">
+            <div className="space-y-2 overflow-y-auto bg-slate-900/50 p-3 rounded-lg flex-grow">
                 {players.map(p => (
                     <div key={p.id} className="flex items-center justify-between gap-2 bg-slate-700 p-2 rounded-lg text-lg font-medium text-white">
                         <div className="flex items-center gap-3 truncate">

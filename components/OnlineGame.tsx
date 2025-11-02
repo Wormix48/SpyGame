@@ -384,12 +384,9 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     
                 const updates: { [key: string]: any } = {};
                 updates[`players/${rejoiningPlayerId}/connectionStatus`] = 'connected';
-                if (disconnectedPlayerByAuthUid.name !== playerName) {
-                    updates[`players/${rejoiningPlayerId}/name`] = playerName;
-                }
-                if (disconnectedPlayerByAuthUid.avatar !== avatar) {
-                    updates[`players/${rejoiningPlayerId}/avatar`] = avatar;
-                }
+                // Always update name and avatar to ensure ghost player data is overwritten
+                updates[`players/${rejoiningPlayerId}/name`] = playerName;
+                updates[`players/${rejoiningPlayerId}/avatar`] = avatar;
                 // Ensure firebaseAuthUid is correct, though it should already match
                 updates[`players/${rejoiningPlayerId}/firebaseAuthUid`] = rejoiningPlayerAuthUid;
 
@@ -488,7 +485,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         
         const currentActivePlayers = Object.values(gameState.players).filter((p: Player) => !p.isEliminated);
         const requiredVotes = Math.ceil(currentActivePlayers.length / 2);
-        const actualVotes = gameState.votes.filter(v => v.votedForId !== null);
+        // Filter out skipped votes AND votes for players who are no longer in the game
+        const actualVotes = gameState.votes.filter(v => v.votedForId !== null && gameState.players[v.votedForId!]);
         const voteCounts: Record<string, number> = {};
         actualVotes.forEach(vote => { voteCounts[vote.votedForId!] = (voteCounts[vote.votedForId!] || 0) + 1; });
 
@@ -506,8 +504,10 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         let newPlayers = { ...gameState.players };
         if (playersToEliminate.length === 1 && maxVotes >= requiredVotes) {
             const eliminatedId = playersToEliminate[0];
-            newPlayers[eliminatedId] = { ...newPlayers[eliminatedId], isEliminated: true };
-            eliminatedPlayer = gameState.players[eliminatedId] || null;
+            if (newPlayers[eliminatedId]) { // CRITICAL: Check if player exists before attempting to eliminate
+                newPlayers[eliminatedId] = { ...newPlayers[eliminatedId], isEliminated: true };
+                eliminatedPlayer = gameState.players[eliminatedId] || null;
+            }
         }
 
         updateGameState({ players: newPlayers, lastEliminated: eliminatedPlayer, voteTimerEnd: null, gamePhase: 'VOTE_REVEAL' });
@@ -801,7 +801,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     onKickPlayer={handleKickPlayer}
                     onTransferHost={handleTransferHost}
                 />;
-            case 'ANSWERING': return <AnsweringScreen player={localPlayer} players={activePlayers} question={gameState.currentQuestion!} answers={gameState.answers} onSubmit={handleAnswerSubmit} timerEnd={gameState.answerTimerEnd} isLocalMode={false} isHost={isHost} noTimer={gameState.noTimer} onForceEndAnswering={() => updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: gameState.noTimer ? null : Date.now() + activePlayers.length * 10000 })} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={gameState.showQuestionToSpy} />;
+            case 'ANSWERING': return <AnsweringScreen player={localPlayer} players={activePlayers} question={gameState.currentQuestion!} answers={gameState.answers} onSubmit={handleAnswerSubmit} timerEnd={gameState.answerTimerEnd} isLocalMode={false} isHost={isHost} noTimer={gameState.noTimer} onForceEndAnswering={() => updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: gameState.noTimer ? null : Date.now() + activePlayers.length * 10000 })} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={gameState.showQuestionToSpy} hideAnswerStatus={gameState.hideAnswerStatus} />;
             case 'RESULTS_DISCUSSION': return <ResultsDiscussionScreen question={gameState.currentQuestion!} players={playerList} answers={gameState.answers} onVote={handleVoteSubmit} onTally={handleVoteTally} votingEnabled={gameState.votingEnabled} localPlayerId={localPlayerId} votes={gameState.votes} timerEnd={gameState.voteTimerEnd} isHost={isHost} isLocalMode={false} noTimer={gameState.noTimer} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={gameState.showQuestionToSpy} revealVotes={isKonamiActive} />;
             case 'VOTE_REVEAL': return <VoteRevealScreen eliminatedPlayer={gameState.lastEliminated} votes={gameState.votes} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={gameState.anonymousVoting} revealSpies={isKonamiActive} />;
             case 'GAME_OVER': return <GameOverScreen winner={gameState.winner!} players={playerList} onNewGame={() => handleLeaveRoom(true)} onReplay={handleReplay} isHost={isHost} isLocalMode={false} />;

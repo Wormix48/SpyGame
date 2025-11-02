@@ -18,6 +18,7 @@ interface AnsweringScreenProps {
   onTransferHost?: (playerId: string) => void;
   showQuestionToSpy?: boolean;
   isSendingAnswer?: boolean;
+  hideAnswerStatus?: boolean;
 }
 
 const Timer: React.FC<{ expiryTimestamp: number | null }> = ({ expiryTimestamp }) => {
@@ -48,7 +49,7 @@ const Timer: React.FC<{ expiryTimestamp: number | null }> = ({ expiryTimestamp }
     );
 };
 
-export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, players, question, answers, onSubmit, timerEnd, isLocalMode, isHost, noTimer, onForceEndAnswering, onKickPlayer, onTransferHost, showQuestionToSpy = true, isSendingAnswer = false }) => {
+export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, players, question, answers, onSubmit, timerEnd, isLocalMode, isHost, noTimer, onForceEndAnswering, onKickPlayer, onTransferHost, showQuestionToSpy = true, isSendingAnswer = false, hideAnswerStatus = false }) => {
   const [hasAnswered, setHasAnswered] = useState(false);
   const [awaitingAcknowledgement, setAwaitingAcknowledgement] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
@@ -109,15 +110,16 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
 
             {!isLocalMode && (
                 <div className="mt-8 w-full">
-                    <h3 className="text-xl font-semibold mb-4 text-center">Статус ответов:</h3>
+                    {!hideAnswerStatus && <h3 className="text-xl font-semibold mb-4 text-center">Статус ответов:</h3>}
                     <div className="flex flex-wrap justify-center gap-2">
                         {players.map(p => {
                             const pHasAnswered = answers.some(a => a.playerId === p.id);
+                            const statusClasses = hideAnswerStatus ? 'bg-slate-600 text-slate-300' : (pHasAnswered ? 'bg-green-500/80 text-white' : 'bg-slate-600 text-slate-300');
                             return (
-                                <div key={p.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${pHasAnswered ? 'bg-green-500/80 text-white' : 'bg-slate-600 text-slate-300'}`}>
+                                <div key={p.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${statusClasses}`}>
                                     <Avatar avatar={p.avatar} className="w-5 h-5" />
                                     <span className="font-semibold player-name-reveal-spy" data-is-spy={p.isSpy}>{p.name}</span>
-                                    {pHasAnswered && '✓'}
+                                    {!hideAnswerStatus && pHasAnswered && '✓'}
                                     {p.connectionStatus === 'disconnected' && <WarningIcon className="w-4 h-4 text-yellow-400" title="Игрок отключился" />}
                                 </div>
                             );
@@ -219,15 +221,16 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
       
       {!isLocalMode && (
         <div className="mt-8 w-full">
-            <h3 className="text-xl font-semibold mb-4 text-center">Статус ответов:</h3>
+            {!hideAnswerStatus && <h3 className="text-xl font-semibold mb-4 text-center">Статус ответов:</h3>}
             <div className="flex flex-wrap justify-center gap-2">
                 {players.map(p => {
                     const pHasAnswered = answers.some(a => a.playerId === p.id);
+                    const statusClasses = hideAnswerStatus ? 'bg-slate-600 text-slate-300' : (pHasAnswered ? 'bg-green-500/80 text-white' : 'bg-slate-600 text-slate-300');
                     return (
-                        <div key={p.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-300 ${pHasAnswered ? 'bg-green-500/80 text-white' : 'bg-slate-600 text-slate-300'}`}>
+                        <div key={p.id} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors duration-300 ${statusClasses}`}>
                             <Avatar avatar={p.avatar} className="w-5 h-5" />
                             <span className="font-semibold player-name-reveal-spy" data-is-spy={p.isSpy}>{p.name}</span>
-                            {pHasAnswered && '✓'}
+                            {!hideAnswerStatus && pHasAnswered && '✓'}
                             {p.connectionStatus === 'disconnected' && <WarningIcon className="w-4 h-4 text-yellow-400" title="Игрок отключился" />}
                             {isHost && !p.isHost && (
                                 <div className="flex items-center gap-1 ml-auto">

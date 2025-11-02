@@ -81,4 +81,5 @@ export interface GameState {
   winner: 'PLAYERS' | 'SPIES' | null;
   answerTimerEnd: number | null;
   voteTimerEnd: number | null;
+  hideAnswerStatus: boolean;
 }

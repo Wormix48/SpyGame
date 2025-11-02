@@ -248,114 +248,136 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
      }
   }
 
-  // Online Mode Render
-  const localPlayer = players.find(p => p.id === localPlayerId);
-  const isSpectator = !!localPlayer?.isEliminated;
-  const localPlayerHasVoted = hasVoted(localPlayerId);
+    // Online Mode Render
+    const localPlayer = players.find(p => p.id === localPlayerId);
+    const isSpectator = !!localPlayer?.isEliminated;
+    const localPlayerHasVoted = hasVoted(localPlayerId);
 
-  return (
-    <div className="flex flex-col items-center">
-      <h2 className="text-3xl font-bold mb-4 text-center">Результаты и Обсуждение</h2>
-      {shouldShowQuestion() && (
-          <div className="w-full bg-slate-900/50 p-4 rounded-lg mb-6 text-center">
-            <p className="text-lg font-semibold text-slate-300">Вопрос:</p>
-            <p className="text-2xl text-cyan-400 font-bold">{question.text}</p>
-          </div>
-      )}
-      
-      <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-3">
-            <h3 className="text-xl text-white font-semibold text-center mb-2">Ответы игроков</h3>
-            {activePlayers.map(player => (
-            <div key={player.id} className="flex items-center justify-between bg-slate-700 p-4 rounded-lg gap-4">
-                <div className="flex items-center gap-3 flex-shrink-0">
-                    <Avatar avatar={player.avatar} className="w-8 h-8" />
-                    <span className="text-xl font-bold text-white flex items-center gap-2">
-                        <span className="player-name-reveal-spy" data-is-spy={player.isSpy}>{player.name}</span>
-                        {votingEnabled && (
-                                                            <div title={hasVoted(player.id) ? "Проголосовал(а)" : "Голосует..."}>
-                                                                {hasVoted(player.id) ? (
-                                                                    <CheckIcon className="w-5 h-5 text-green-400" />
-                                                                ) : (
-                                                                    <div className="w-5 h-5 flex items-center justify-center">
-                                                                        <div className="w-2.5 h-2.5 bg-slate-500 rounded-full animate-pulse"></div>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        {revealVotes && hasVoted(player.id) && (
-                                                            <span className="text-sm text-yellow-400">(за: {getVoteForPlayer(player.id)})</span>
-                                                        )}
-                                                        {player.connectionStatus === 'disconnected' && <WarningIcon className="w-5 h-5 text-yellow-400" title="Игрок отключился" />}
-                                                         {isHost && !player.isHost && (
-                                                            <>
-                                                                <button onClick={() => onTransferHost(player.id)} className="text-yellow-400 hover:text-yellow-300" title="Передать хоста">
-                                                                    <KeyIcon className="h-5 w-5" />                                </button>
-                                <button onClick={() => onKickPlayer(player.id)} className="text-red-400 hover:text-red-300" title="Исключить">
-                                    <CrossIcon className="h-5 w-5" />
-                                </button>
-                            </>
-                        )}
-                    </span>
-                </div>
-                <span className="text-xl font-medium text-cyan-300 bg-slate-800 px-3 py-1 rounded text-right flex-grow truncate">{getAnswerForPlayer(player.id)}</span>
-            </div>
-            ))}
-        </div>
-
-        {votingEnabled && (
-            <div className="space-y-3">
-                <h3 className="text-xl text-white font-semibold text-center mb-2">Голосование</h3>
-                {!isLocalMode && <Timer expiryTimestamp={timerEnd} onExpire={() => { if(isHost) onTally() }} />}
-                
-                {isSpectator && <p className="text-slate-400 text-center bg-slate-800 p-3 rounded-lg">Вы выбыли и не можете голосовать.</p>}
-
-                {activePlayers.filter(p => p.id !== localPlayerId).map(player => (
-                    <button
-                        key={player.id}
-                        onClick={() => onVote(player.id)}
-                        disabled={localPlayerHasVoted || isSpectator}
-                        className={`w-full text-left text-lg font-semibold p-4 rounded-lg transition-all duration-200 flex items-center gap-3
-                            ${localPlayerHasVoted || isSpectator ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-700 hover:bg-red-700 text-white'}
-                            ${player.connectionStatus === 'disconnected' ? 'opacity-50' : ''}`}
-                    >
-                        <Avatar avatar={player.avatar} className="w-8 h-8" />
-                        <span className="flex-grow player-name-reveal-spy" data-is-spy={player.isSpy}>{player.name}</span>
-                         <div className="flex items-center gap-2">
-                            {player.connectionStatus === 'disconnected' && <WarningIcon className="w-5 h-5 text-yellow-400" title="Игрок отключился" />}
-                        </div>
-                    </button>
-                ))}
-                {!isSpectator && (
-                    <button
-                        onClick={() => onVote(localPlayerId)}
-                        disabled={localPlayerHasVoted}
-                        className={`w-full text-left text-lg font-semibold p-4 rounded-lg transition-all duration-200 flex items-center gap-3
-                            ${localPlayerHasVoted ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-red-800 hover:bg-red-700 text-white'}`}
-                    >
-                        <Avatar avatar={localPlayer?.avatar} className="w-8 h-8" />
-                        <span className="flex-grow">Проголосовать за себя ({localPlayer?.name})</span>
-                    </button>
-                )}
-                 <button
-                    onClick={() => onVote(null)}
-                    disabled={localPlayerHasVoted || isSpectator}
-                    className={`w-full text-center text-lg font-semibold p-4 rounded-lg transition-all duration-200
-                        ${localPlayerHasVoted || isSpectator ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-500 text-white'}`}
-                >
-                    Пропустить голосование
-                </button>
-                 {isHost && (
-                    <button
-                        onClick={onTally}
-                        className="w-full text-center text-lg font-semibold p-4 rounded-lg transition-all duration-200 bg-yellow-600 hover:bg-yellow-500 text-white mt-4"
-                    >
-                        {noTimer ? 'Подсчитать голоса' : 'Завершить досрочно'}
-                    </button>
-                )}
+    return (
+      <div className="flex flex-col items-center w-full max-w-4xl mx-auto">
+        <h2 className="text-3xl font-bold mb-4 text-center">Результаты и Обсуждение</h2>
+        {shouldShowQuestion() && (
+            <div className="w-full bg-slate-900/50 p-4 rounded-lg mb-6 text-center">
+              <p className="text-lg font-semibold text-slate-300">Вопрос:</p>
+              <p className="text-2xl text-cyan-400 font-bold">{question.text}</p>
             </div>
         )}
+        
+        {/* Таймер */}
+        {votingEnabled && !isLocalMode && <Timer expiryTimestamp={timerEnd} onExpire={() => { if(isHost) onTally() }} />}
+        {isSpectator && <p className="text-slate-400 text-center bg-slate-800 p-3 rounded-lg mb-4">Вы выбыли и не можете голосовать.</p>}
+
+        {/* Блоки ответов и голосования (обновленный дизайн) */}
+        <div className="w-full space-y-4 mb-6">
+          <div className="grid grid-cols-2 gap-4 text-center text-xl font-bold text-slate-300 mb-2">
+            <div className="text-left p-4">Ответы</div>
+            <div className="text-center p-4">Голосование</div>
+          </div>
+
+          {/* Строки с игроками */}
+          {activePlayers.map(player => {
+              const voted = hasVoted(player.id);
+              return (
+                                <div key={player.id} className="grid grid-cols-2 gap-4">
+                                    {/* Левая часть: Игрок и Ответ */}
+                                    <div className="flex flex-col items-start p-4 gap-2 relative bg-slate-700 rounded-xl shadow-lg border border-slate-600 overflow-hidden hover:bg-slate-600 transition-colors">
+                                        <div className="flex items-center justify-between w-full">
+                                            <div className="flex items-center gap-3 flex-shrink-0">
+                                                <Avatar avatar={player.avatar} className="w-8 h-8" />
+                                                <span className="text-xl font-bold text-white player-name-reveal-spy" data-is-spy={player.isSpy}>{player.name}</span>
+                                                {votingEnabled && revealVotes && hasVoted(player.id) && (
+                                                    <span className="text-sm text-yellow-400 font-medium">(за: {getVoteForPlayer(player.id)})</span>
+                                                )}
+                                            </div>
+                                        
+                                            <div className="flex items-center space-x-2">
+                                                {/* Галочка справа от имени */}
+                                                {voted && <CheckIcon className="w-6 h-6 text-green-400" title="Проголосовал(а)" />}
+              
+                                                {/* Admin/Disconnect controls */}
+                                                {player.connectionStatus === 'disconnected' && <WarningIcon className="w-5 h-5 text-yellow-400" title="Игрок отключился" />}
+                                                {isHost && !player.isHost && (
+                                                    <>
+                                                        <button onClick={() => onTransferHost(player.id)} className="text-yellow-400 hover:text-yellow-300" title="Передать хоста">
+                                                            <KeyIcon className="h-5 w-5" />
+                                                        </button>
+                                                        <button onClick={() => onKickPlayer(player.id)} className="text-red-400 hover:text-red-300" title="Исключить">
+                                                            <CrossIcon className="h-5 w-5" />
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <span className="text-lg font-medium text-cyan-300 bg-slate-800 px-3 py-1 rounded w-full truncate">{getAnswerForPlayer(player.id)}</span>
+                                    </div>
+                                    {/* Столбец 2: Кнопка голосования / Статус */}
+                                    <div className="flex items-stretch justify-center p-0">
+                                                      {votingEnabled ? (
+                                                          player.id === localPlayerId ? (
+                                                              <button
+                                                                  onClick={() => onVote(localPlayerId)}
+                                                                  disabled={localPlayerHasVoted || isSpectator}
+                                                                  className={`w-full h-full text-center text-lg font-semibold p-3 transition-all duration-200 flex items-center justify-center
+                                                                      ${localPlayerHasVoted || isSpectator ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-red-800 hover:bg-red-700 text-white'} rounded-xl shadow-lg border border-slate-600`}
+                                                              >
+                                                                  Голосовать за себя
+                                                              </button>
+                                                          ) : (
+                                                              <button
+                                                                  onClick={() => onVote(player.id)}
+                                                                  disabled={localPlayerHasVoted || isSpectator}
+                                                                  className={`w-full h-full text-center text-lg font-semibold p-3 transition-all duration-200 flex items-center justify-center
+                                                                      ${localPlayerHasVoted || isSpectator ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-700 hover:bg-red-700 text-white'} rounded-xl shadow-lg border border-slate-600`}
+                                                              >
+                                                                  Голосовать за {player.name}
+                                                              </button>
+                                                          )
+                                                      ) : (
+                                                          <div className="flex items-center gap-2 text-lg font-semibold text-slate-400 h-full w-full justify-center">
+                                                              {hasVoted(player.id) ? (
+                                                                  <>
+                                                                      <CheckIcon className="w-6 h-6 text-green-400" />
+                                                                      <span>Проголосовал(а)</span>
+                                                                  </>
+                                                              ) : (
+                                                                  <>
+                                                                      <div className="w-3 h-3 bg-slate-500 rounded-full animate-pulse"></div>
+                                                                      <span>Ожидание...</span>
+                                                                  </>
+                                                              )}
+                                                              {revealVotes && hasVoted(player.id) && (
+                                                                  <span className="text-sm text-yellow-400">(за: {getVoteForPlayer(player.id)})</span>
+                                                              )}
+                                                          </div>
+                                                      )}
+                                                  </div>
+              </div>
+              );
+          })}
+
+        </div>
+
+        {/* Дополнительные кнопки голосования (отдельный блок) */}
+        {votingEnabled && !isSpectator && (
+          <div className="w-full max-w-md flex flex-col gap-3 mt-6">
+              <button
+                  onClick={() => onVote(null)}
+                  disabled={localPlayerHasVoted}
+                  className={`w-full text-center text-lg font-semibold p-4 rounded-lg transition-all duration-200
+                      ${localPlayerHasVoted ? 'bg-slate-600 text-slate-400 cursor-not-allowed' : 'bg-slate-700 hover:bg-slate-500 text-white'}`}
+              >
+                  Пропустить голосование
+              </button>
+              {isHost && (
+                  <button
+                      onClick={onTally}
+                      className="w-full text-center text-lg font-semibold p-4 rounded-lg transition-all duration-200 bg-yellow-600 hover:bg-yellow-500 text-white"
+                  >
+                      {noTimer ? 'Подсчитать голоса' : 'Завершить досрочно'}
+                  </button>
+              )}
+          </div>
+        )}
       </div>
-    </div>
-  );
+    );
 };
