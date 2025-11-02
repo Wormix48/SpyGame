@@ -56,7 +56,7 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
 
     useEffect(() => {
 
-        if (!isLocalMode) {
+        if (!isLocalMode && player) {
 
             const answered = (answers || []).some(a => a.playerId === player.id);
 
@@ -70,7 +70,7 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
 
         }
 
-    }, [answers, player.id, isLocalMode]);
+    }, [answers, player, isLocalMode]);
 
     
 

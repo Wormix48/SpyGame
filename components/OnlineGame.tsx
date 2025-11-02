@@ -193,23 +193,27 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         if (!publicGameState?.roomId || !localPlayerId || isHost) return;
 
         const hostPlayer = players[publicGameState.hostId!];
-        if (hostPlayer && hostPlayer.connectionStatus === 'disconnected') {
+        if (hostPlayer?.connectionStatus === 'disconnected') {
             console.log(`Host ${hostPlayer.name} (${hostPlayer.id}) disconnected. Initiating host migration.`);
 
             const roomRef = db.ref(`rooms/${publicGameState.roomId}`);
             roomRef.transaction((currentRoomState: GameState | null) => {
                 if (!currentRoomState) return currentRoomState;
 
-                const disconnectedHost = currentRoomState.players[currentRoomState.hostId];
+                const disconnectedHost = currentRoomState.players[currentRoomState.public.hostId];
                 if (!disconnectedHost || disconnectedHost.connectionStatus !== 'disconnected') {
                     return currentRoomState; // Host is not disconnected, or already migrated
                 }
 
-                const remainingPlayers = Object.values(currentRoomState.players).filter(p => p.id !== currentRoomState.hostId && p.connectionStatus === 'connected');
+                const remainingPlayers = Object.values(currentRoomState.players).filter(p => 
+                    p.id !== currentRoomState.hostId && 
+                    p.connectionStatus === 'connected' && 
+                    !p.id.startsWith('BOT-') // Исключаем ботов из кандидатов на хоста
+                );
 
                 if (remainingPlayers.length > 0) {
                     const nextHost = remainingPlayers.sort((a: Player, b: Player) => (a.joinTimestamp || 0) - (b.joinTimestamp || 0))[0];
-                    currentRoomState.hostId = nextHost.id;
+                    currentRoomState.public.hostId = nextHost.id;
                     if (currentRoomState.players[nextHost.id]) {
                         currentRoomState.players[nextHost.id].isHost = true;
                     }
@@ -252,7 +256,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 if (!currentRoomState || !currentRoomState.players || !currentRoomState.players[currentLocalPlayerId]) {
                     return currentRoomState;
                 }
-                const isLeavingPlayerHost = currentRoomState.hostId === currentLocalPlayerId;
+                const isLeavingPlayerHost = currentRoomState.public.hostId === currentLocalPlayerId;
                 
                 // Mark player as disconnected instead of deleting them
                 currentRoomState.players[currentLocalPlayerId].connectionStatus = 'disconnected';
@@ -266,7 +270,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     // Only migrate host if there is a connected player to take over
                     if (remainingConnectedPlayers.length > 0) {
                         const nextHost = remainingConnectedPlayers.sort((a: Player, b: Player) => (a.joinTimestamp || 0) - (b.joinTimestamp || 0))[0];
-                        currentRoomState.hostId = nextHost.id;
+                        currentRoomState.public.hostId = nextHost.id;
                         currentRoomState.players[nextHost.id].isHost = true;
                         currentRoomState.players[currentLocalPlayerId].isHost = false; // Old host is no longer host
                     }
@@ -311,35 +315,62 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         setIsLoading(true);
         setError(null);
         
+
         // --- Database Garbage Collection ---
+
         try {
+
             const allRoomsRef = db.ref('rooms');
+
             const snapshot = await allRoomsRef.get();
+
             if (snapshot.exists()) {
+
                 const allRooms = snapshot.val();
+
                 const updates: { [key: string]: null } = {};
+
                 for (const roomId in allRooms) {
+
                     const room = allRooms[roomId];
+
                     const players = room.players ? Object.values(room.players) : [];
+
                     const hasConnectedHumanPlayers = players.some((p: any) => !p.id.startsWith('BOT-') && p.connectionStatus === 'connected');
+
                     
+
                     if (!hasConnectedHumanPlayers) {
+
                         updates[`/rooms/${roomId}`] = null;
+
                         console.log(`Marking empty room ${roomId} for deletion.`);
+
                     }
+
                 }
+
                 if (Object.keys(updates).length > 0) {
+
                     await db.ref().update(updates);
+
                     console.log(`${Object.keys(updates).length} empty rooms deleted.`);
+
                 }
+
             }
+
         } catch (e) {
+
             console.warn("Garbage collection script failed:", e);
+
         }
+
         // --- End Garbage Collection ---
 
-        const playerId = localPlayerId;
-        const authUid = firebaseAuthUid;
+
+
+        const playerId = localPlayerId;        const authUid = firebaseAuthUid;
         if (!playerId || !authUid) {
             setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
             setIsLoading(false);
@@ -534,7 +565,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         const currentActivePlayers = Object.values(players).filter((p: Player) => !p.isEliminated);
         const requiredVotes = Math.ceil(currentActivePlayers.length / 2);
         // Filter out skipped votes AND votes for players who are no longer in the game
-        const actualVotes = combinedGameState.votes.filter(v => v.votedForId !== null && players[v.votedForId!]);
+        const actualVotes = (combinedGameState.votes ?? []).filter(v => v.votedForId !== null && players[v.votedForId!]);
         const voteCounts: Record<string, number> = {};
         actualVotes.forEach(vote => { voteCounts[vote.votedForId!] = (voteCounts[vote.votedForId!] || 0) + 1; });
 
