@@ -124,21 +124,35 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
 
   
 
-    if (player.isEliminated) {
+        if (!player || player.isEliminated) {
 
-      return (
+  
 
-          <div className="relative flex flex-col items-center text-center animate-fade-in">
+          return (
 
-              {!isLocalMode && <Timer expiryTimestamp={timerEnd} />}
+  
 
-              <div className="min-h-[150px] flex flex-col items-center justify-center">
+              <div className="relative flex flex-col items-center text-center animate-fade-in">
 
-                  <h2 className="text-3xl font-bold text-slate-400 mt-4">Вы выбыли из игры</h2>
+  
 
-                  <p className="text-slate-300 mt-2">Вы можете наблюдать за ходом раунда.</p>
+                  {!isLocalMode && <Timer expiryTimestamp={timerEnd} />}
 
-              </div>
+  
+
+                  <div className="min-h-[150px] flex flex-col items-center justify-center">
+
+  
+
+                      <h2 className="text-3xl font-bold text-slate-400 mt-4">Вы выбыли из игры</h2>
+
+  
+
+                      <p className="text-slate-300 mt-2">Вы можете наблюдать за ходом раунда.</p>
+
+  
+
+                  </div>
 
               
 
@@ -311,7 +325,7 @@ export const AnsweringScreen: React.FC<AnsweringScreenProps> = ({ player, player
                             <span className="font-semibold player-name-reveal-spy" data-is-spy={p.isSpy}>{p.name}</span>
                             {!hideAnswerStatus && pHasAnswered && '✓'}
                             {p.connectionStatus === 'disconnected' && <WarningIcon className="w-4 h-4 text-yellow-400" title="Игрок отключился" />}
-                            {isHost && !p.isHost && (
+                            {isHost && !p.isHost && !p.id.startsWith('BOT-') && (
                                 <div className="flex items-center gap-1 ml-auto">
                                     <button
                                         onClick={() => onTransferHost?.(p.id)}

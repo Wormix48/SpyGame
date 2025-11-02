@@ -292,7 +292,7 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
                                 {p.connectionStatus === 'disconnected' && <WarningIcon className="w-4 h-4 text-yellow-400" title="Игрок отключился"/>}
                             </span>
                         </div>
-                        {isHost && !p.isHost && (
+                        {isHost && !p.isHost && !p.id.startsWith('BOT-') && (
                             <div className="flex items-center gap-1 flex-shrink-0">
                                 <button
                                     onClick={() => onTransferHost(p.id)}

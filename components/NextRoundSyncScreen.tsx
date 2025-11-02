@@ -59,7 +59,7 @@ export const NextRoundSyncScreen: React.FC<NextRoundSyncScreenProps> = ({ player
                                            <div className="w-3 h-3 bg-slate-500 rounded-full animate-pulse"></div>
                                        </div>
                                     ) : null}
-                                    {isHost && !p.isHost && (
+                                    {isHost && !p.isHost && !p.id.startsWith('BOT-') && (
                                         <>
                                             <button
                                                 onClick={() => onTransferHost(p.id)}

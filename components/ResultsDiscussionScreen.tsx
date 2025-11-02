@@ -276,6 +276,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
 
           {/* Строки с игроками */}
           {activePlayers.map(player => {
+              if (!player) return null;
               const voted = hasVoted(player.id);
               return (
                                 <div key={player.id} className="grid grid-cols-2 gap-4">
@@ -296,7 +297,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
               
                                                 {/* Admin/Disconnect controls */}
                                                 {player.connectionStatus === 'disconnected' && <WarningIcon className="w-5 h-5 text-yellow-400" title="Игрок отключился" />}
-                                                {isHost && !player.isHost && (
+                                                {isHost && !player.isHost && !player.id.startsWith('BOT-') && (
                                                     <>
                                                         <button onClick={() => onTransferHost(player.id)} className="text-yellow-400 hover:text-yellow-300" title="Передать хоста">
                                                             <KeyIcon className="h-5 w-5" />
