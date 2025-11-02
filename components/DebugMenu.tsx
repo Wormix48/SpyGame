@@ -89,7 +89,7 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
     };
 
     const getConnectedBots = (includeEliminated = false) => {
-        let bots = (Object.values(gameState.players) as Player[]).filter(p => p.id.startsWith('BOT-') && p.connectionStatus === 'connected');
+        let bots = (Object.values(gameState.players) as Player[]).filter(p => p.id.startsWith('BOT-'));
         if (!includeEliminated) {
             bots = bots.filter(p => !p.isEliminated);
         }
@@ -117,7 +117,7 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         if (!answerOptions || answerOptions.length === 0) return;
         const randomAnswer = answerOptions[Math.floor(Math.random() * answerOptions.length)];
         // FIX: Replaced ref() and runTransaction() with v8 `db.ref()` and `ref.transaction()`.
-        db.ref(`rooms/${gameState.roomId}/answers`).transaction((currentData: Answer[] | null) => {
+        db.ref(`rooms/${gameState.roomId}/public/answers`).transaction((currentData: Answer[] | null) => {
             const newAnswer = { playerId: botId, answer: randomAnswer }; if (!currentData) return [newAnswer]; if (currentData.some(a => a.playerId === botId)) return; return [...currentData, newAnswer];
         });
     };
@@ -129,7 +129,7 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         const shouldSkip = Math.random() < 0.1; let votedForId: string | null = null;
         if (!shouldSkip) votedForId = activePlayers[Math.floor(Math.random() * activePlayers.length)].id;
         // FIX: Replaced ref() and runTransaction() with v8 `db.ref()` and `ref.transaction()`.
-        db.ref(`rooms/${gameState.roomId}/votes`).transaction((currentData: Vote[] | null) => {
+        db.ref(`rooms/${gameState.roomId}/public/votes`).transaction((currentData: Vote[] | null) => {
             const newVote = { voterId: botId, votedForId }; if (!currentData) return [newVote]; if (currentData.some(v => v.voterId === botId)) return; return [...currentData, newVote];
         });
     };

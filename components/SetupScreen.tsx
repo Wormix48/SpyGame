@@ -38,17 +38,23 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
       const savedSettingsRaw = localStorage.getItem(SETTINGS_KEY);
       if (savedSettingsRaw) {
         const saved = JSON.parse(savedSettingsRaw);
-        // We only apply these settings once on load, subsequent changes come from parent state
-        onSettingsChange({
-          spyCount: saved.spyCount ?? initialSettings.initialSpyCount,
-          familyFriendly: saved.familyFriendly ?? initialSettings.familyFriendly,
-          questionSource: saved.questionSource ?? initialSettings.questionSource,
-          noTimer: saved.noTimer ?? initialSettings.noTimer,
-          roundLimit: saved.roundLimit ?? initialSettings.roundLimit,
-          showQuestionToSpy: saved.showQuestionToSpy ?? initialSettings.showQuestionToSpy,
-          anonymousVoting: saved.anonymousVoting ?? initialSettings.anonymousVoting,
-          hideAnswerStatus: saved.hideAnswerStatus ?? initialSettings.hideAnswerStatus,
+        const settingsToApply = {
+            spyCount: saved.spyCount ?? initialSettings.initialSpyCount,
+            familyFriendly: saved.familyFriendly ?? initialSettings.familyFriendly,
+            questionSource: saved.questionSource ?? initialSettings.questionSource,
+            noTimer: saved.noTimer ?? initialSettings.noTimer,
+            roundLimit: saved.roundLimit ?? initialSettings.roundLimit,
+            showQuestionToSpy: saved.showQuestionToSpy ?? initialSettings.showQuestionToSpy,
+            anonymousVoting: saved.anonymousVoting ?? initialSettings.anonymousVoting,
+            hideAnswerStatus: saved.hideAnswerStatus ?? initialSettings.hideAnswerStatus,
+        };
+        // Ensure no undefined values are sent
+        Object.keys(settingsToApply).forEach(key => {
+            if ((settingsToApply as any)[key] === undefined) {
+                (settingsToApply as any)[key] = (initialSettings as any)[key];
+            }
         });
+        onSettingsChange(settingsToApply);
       }
     } catch (e) {
       console.error("Failed to load online game settings", e);

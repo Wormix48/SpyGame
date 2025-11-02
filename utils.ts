@@ -26,7 +26,7 @@ export const checkWinConditions = (players: Player[]): 'PLAYERS' | 'SPIES' | nul
     return null;
 };
 
-export const processImage = (file: File, size = 512): Promise<string> => {
+export const processImage = (file: File, maxSize = 96): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -35,8 +35,8 @@ export const processImage = (file: File, size = 512): Promise<string> => {
             img.src = event.target?.result as string;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                canvas.width = size;
-                canvas.height = size;
+                canvas.width = maxSize;
+                canvas.height = maxSize;
                 const ctx = canvas.getContext('2d');
                 if (!ctx) {
                     return reject(new Error('Could not get canvas context'));
@@ -47,10 +47,10 @@ export const processImage = (file: File, size = 512): Promise<string> => {
                 const sourceX = (img.width - sourceSize) / 2;
                 const sourceY = (img.height - sourceSize) / 2;
 
-                ctx.drawImage(img, sourceX, sourceY, sourceSize, sourceSize, 0, 0, size, size);
+                ctx.drawImage(img, sourceX, sourceY, sourceSize, sourceSize, 0, 0, maxSize, maxSize);
                 
-                // Using PNG to preserve quality.
-                resolve(canvas.toDataURL('image/png'));
+                // Using JPG with quality 0.7 to drastically reduce size
+                resolve(canvas.toDataURL('image/jpeg', 0.7));
             };
             img.onerror = (error) => reject(error);
         };

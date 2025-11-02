@@ -115,7 +115,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
   }
 
   const getAnswerForPlayer = (playerId: string) => {
-    return answers.find(a => a.playerId === playerId)?.answer || 'Нет ответа';
+    return (answers || []).find(a => a.playerId === playerId)?.answer || 'Нет ответа';
   };
 
   const activePlayers = players.filter(p => !p.isEliminated);

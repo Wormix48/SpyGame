@@ -1,41 +1,22 @@
 {
   "rules": {
     "rooms": {
+      ".read": "auth != null",
       "$roomId": {
-        // Allow any authenticated user to read the room data if it exists,
-        // to allow checking game state before joining.
-        ".read": "auth != null && data.exists()",
-
-        // Write is allowed if:
-        // 1. Creating a new room: The room doesn't exist, and the new hostId is the creator's UID.
-        // 2. Updating an existing room: The user is already a player in that room.
-        // 3. Deleting an existing room if it is empty (no players).
-        ".write": "(!data.exists() && newData.child('hostId').val() === auth.uid && newData.child('players').child(auth.uid).exists()) || (data.exists() && data.child('players').hasChild(auth.uid)) || (data.exists() && !data.child('players').exists() && auth != null)",
-
+        ".write": "auth != null",
+        "public": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
         "players": {
-          ".read": "auth != null", // Allow any authenticated user to read players to check for existing names
+          ".read": "auth != null",
           "$playerId": {
-            // A player can write to their own data if their firebaseAuthUid matches auth.uid.
-            // The host can also write to any player's data (to eliminate, assign roles, etc.).
-            // Additionally, a new player can create their own entry if the game is in SETUP phase.
-            ".write": "newData.child('firebaseAuthUid').val() === auth.uid || data.parent().parent().child('hostId').val() === auth.uid || (!data.exists() && newData.child('id').val() === auth.uid && data.parent().parent().child('gamePhase').val() === 'SETUP')"
+            ".write": "auth != null"
           }
         },
-
-        // Only the host can change critical game state properties.
-        "hostId":          { ".write": "data.parent().child('hostId').val() === auth.uid" },
-        "gamePhase":       { ".read": "auth != null", ".write": "data.parent().child('hostId').val() === auth.uid" },
-        "currentQuestion": { ".write": "data.parent().child('hostId').val() === auth.uid" },
-        "lastEliminated":  { ".write": "data.parent().child('hostId').val() === auth.uid" },
-        "winner":          { ".write": "data.parent().child('hostId').val() === auth.uid" },
-
-        // Any player in the room can submit answers or votes,
-        // but validation ensures they can only submit for themselves.
-        "answers": {
-          ".write": "data.parent().child('players').hasChild(auth.uid)"
-        },
-        "votes": {
-          ".write": "data.parent().child('players').hasChild(auth.uid)"
+        "chatMessages": {
+          ".read": "auth != null",
+          ".write": "auth != null"
         }
       }
     }

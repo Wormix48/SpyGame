@@ -31,7 +31,13 @@ interface OnlineGameProps {
 export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExit, initialRoomId, isDebugMenuOpen, closeDebugMenu, isKonamiActive }, ref) => {
     const [localPlayerId, setLocalPlayerId] = useState<string | null>(null); // This will now be the instanceId
     const [firebaseAuthUid, setFirebaseAuthUid] = useState<string | null>(null); // The actual Firebase auth.uid
-    const [gameState, setGameState] = useState<GameState | null>(null);
+    
+    // --- State Refactoring ---
+    const [players, setPlayers] = useState<Record<string, Player>>({});
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [publicGameState, setPublicGameState] = useState<Partial<GameState>>({});
+    // --- End State Refactoring ---
+
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -42,10 +48,19 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const isExitingRef = useRef(false);
     const gameStateUnsubscribeRef = useRef<(() => void) | null>(null);
 
-    const gameStateRef = useRef(gameState);
-    gameStateRef.current = gameState;
+    const gameStateRef = useRef(publicGameState);
+    gameStateRef.current = publicGameState;
     const localPlayerIdRef = useRef(localPlayerId);
     localPlayerIdRef.current = localPlayerId;
+    
+    const combinedGameState = useMemo<GameState | null>(() => {
+        if (!publicGameState.roomId) return null;
+        return {
+            ...publicGameState,
+            players,
+            chatMessages,
+        } as GameState;
+    }, [publicGameState, players, chatMessages]);
 
     // Authenticate user on component mount and generate instanceId
     useEffect(() => {
@@ -62,24 +77,24 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             });
     }, []);
 
-    const isHost = gameState?.hostId === localPlayerId;
+    const isHost = publicGameState?.hostId === localPlayerId;
     const playerList = useMemo(() => {
-        if (!gameState) return [];
-        const players = Object.values(gameState.players);
-        players.sort((a: Player, b: Player) => {
+        if (!players) return [];
+        const playerArr = Object.values(players);
+        playerArr.sort((a: Player, b: Player) => {
             if (a.isHost) return -1;
             if (b.isHost) return 1;
             return (a.joinTimestamp || 0) - (b.joinTimestamp || 0);
         });
-        return players;
-    }, [gameState]);
-    const localPlayer = useMemo(() => (localPlayerId && gameState?.players ? gameState.players[localPlayerId] : null), [gameState, localPlayerId]);
+        return playerArr;
+    }, [players]);
+    const localPlayer = useMemo(() => (localPlayerId && players ? players[localPlayerId] : null), [players, localPlayerId]);
     const activePlayers = useMemo(() => playerList.filter(p => !p.isEliminated), [playerList]);
     
-    const chatMessages = useMemo(() => {
-        if (!gameState?.chatMessages) return [];
-        return Array.isArray(gameState.chatMessages) ? gameState.chatMessages : Object.values(gameState.chatMessages);
-    }, [gameState?.chatMessages]);
+    const memoizedChatMessages = useMemo(() => {
+        if (!chatMessages) return [];
+        return Array.isArray(chatMessages) ? chatMessages : Object.values(chatMessages);
+    }, [chatMessages]);
     
     // Get remembered room ID from URL or localStorage to pre-fill lobby input
     useEffect(() => {
@@ -105,41 +120,57 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
     const subscribeToGameState = useCallback((roomId: string, playerId: string) => {
         const roomRef = db.ref(`rooms/${roomId}`);
-        const onValueCallback = (snapshot: firebase.database.DataSnapshot) => {
+        const listeners: { ref: firebase.database.Reference; callback: (snapshot: firebase.database.DataSnapshot) => void }[] = [];
+
+        const publicRef = roomRef.child('public');
+        const publicCallback = (snapshot: firebase.database.DataSnapshot) => {
             if (isExitingRef.current) return;
-    
-            const data = snapshot.val();
-            if (data) {
-                if (data.players && !data.players[playerId] && data.gamePhase !== 'GAME_OVER') {
-                     setError("Вы были исключены из комнаты или игра завершилась.");
-                     localStorage.removeItem('spy-game-session');
-                     return;
-                }
-    
-                const sanitizedData: GameState = {
-                    ...data,
-                    answers: data.answers || [],
-                    votes: data.votes || [],
-                    usedQuestionIds: data.usedQuestionIds || [],
-                    usedQuestionTexts: data.usedQuestionTexts || [],
-                    players: data.players || {},
-                    chatMessages: data.chatMessages || [],
-                };
-                setGameState(sanitizedData);
-            } else {
-                if (gameStateRef.current) {
-                    setError("Комната была удалена, или последний игрок вышел.");
-                    localStorage.removeItem('spy-game-session');
-                }
+            setPublicGameState(snapshot.val() || {});
+        };
+        publicRef.on('value', publicCallback);
+        listeners.push({ ref: publicRef, callback: publicCallback });
+
+        const playersRef = roomRef.child('players');
+        const playersCallback = (snapshot: firebase.database.DataSnapshot) => {
+            if (isExitingRef.current) return;
+            const currentPlayers = snapshot.val() || {};
+            setPlayers(currentPlayers);
+            // This is a crucial check after the player data is loaded.
+            if (publicGameState.gamePhase && publicGameState.gamePhase !== 'GAME_OVER' && !currentPlayers[playerId]) {
+                setError("Вы были исключены из комнаты или игра завершилась.");
+                localStorage.removeItem('spy-game-session');
             }
         };
-        roomRef.on('value', onValueCallback);
-        gameStateUnsubscribeRef.current = () => roomRef.off('value', onValueCallback);
-    }, []);
+        playersRef.on('value', playersCallback);
+        listeners.push({ ref: playersRef, callback: playersCallback });
+
+        const chatRef = roomRef.child('chatMessages');
+        const chatCallback = (snapshot: firebase.database.DataSnapshot) => {
+            if (isExitingRef.current) return;
+            const messages = snapshot.val();
+            setChatMessages(messages ? Object.values(messages) : []);
+        };
+        chatRef.on('value', chatCallback);
+        listeners.push({ ref: chatRef, callback: chatCallback });
+        
+        const roomExistsCallback = (snapshot: firebase.database.DataSnapshot) => {
+            if (isExitingRef.current) return;
+            if (!snapshot.exists()) {
+                 setError("Комната была удалена, или последний игрок вышел.");
+                 localStorage.removeItem('spy-game-session');
+            }
+        };
+        roomRef.on('value', roomExistsCallback);
+        listeners.push({ ref: roomRef, callback: roomExistsCallback });
+
+        gameStateUnsubscribeRef.current = () => {
+            listeners.forEach(({ ref, callback }) => ref.off('value', callback));
+        };
+    }, [publicGameState.gamePhase]);
 
     useEffect(() => {
-        if (gameState?.roomId && localPlayerId) {
-            const playerRef = db.ref(`rooms/${gameState.roomId}/players/${localPlayerId}`);
+        if (publicGameState?.roomId && localPlayerId) {
+            const playerRef = db.ref(`rooms/${publicGameState.roomId}/players/${localPlayerId}`);
             const connectedRef = db.ref('.info/connected');
 
             const listener = connectedRef.on('value', (snap) => {
@@ -155,17 +186,17 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 connectedRef.off('value', listener);
             };
         }
-    }, [gameState, localPlayerId]);
+    }, [publicGameState, localPlayerId]);
 
     // Host migration logic
     useEffect(() => {
-        if (!gameState?.roomId || !localPlayerId || isHost) return;
+        if (!publicGameState?.roomId || !localPlayerId || isHost) return;
 
-        const hostPlayer = gameState.players[gameState.hostId];
+        const hostPlayer = players[publicGameState.hostId!];
         if (hostPlayer && hostPlayer.connectionStatus === 'disconnected') {
             console.log(`Host ${hostPlayer.name} (${hostPlayer.id}) disconnected. Initiating host migration.`);
 
-            const roomRef = db.ref(`rooms/${gameState.roomId}`);
+            const roomRef = db.ref(`rooms/${publicGameState.roomId}`);
             roomRef.transaction((currentRoomState: GameState | null) => {
                 if (!currentRoomState) return currentRoomState;
 
@@ -195,7 +226,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 return currentRoomState;
             }).catch(e => console.error("Failed to perform host migration transaction:", e));
         }
-    }, [gameState, localPlayerId, isHost]);
+    }, [publicGameState, localPlayerId, isHost, players]);
 
     // Cleanup function for explicit exit
     const handleLeaveRoom = useCallback((shouldCallOnExit: boolean = true) => {
@@ -209,7 +240,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
         localStorage.removeItem('spy-game-session');
 
-        const roomId = gameStateRef.current?.roomId;
+        const roomId = publicGameState.roomId;
         const currentLocalPlayerId = localPlayerIdRef.current;
 
         if (roomId && currentLocalPlayerId) {
@@ -247,7 +278,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         if (shouldCallOnExit) {
             onExit();
         }
-    }, [onExit]);
+    }, [onExit, publicGameState.roomId]);
 
     useImperativeHandle(ref, () => ({
         cleanup: () => handleLeaveRoom(false),
@@ -262,62 +293,50 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     }, []);
 
     const updateGameState = useCallback((newState: Partial<GameState>) => {
-        console.log('updateGameState called with:', newState);
-        if (isHost && gameState?.roomId) {
-            db.ref(`rooms/${gameState.roomId}`).transaction((currentState) => {
-                console.log('Transaction: current state', currentState);
-                if (currentState) {
-                    const updatedState = { ...currentState, ...newState };
-                    console.log('Transaction: updated state', updatedState);
-                    return updatedState;
-                }
-                console.log('Transaction: no current state, returning null');
-                return currentState;
-            }).then(result => {
-                if (result.committed) {
-                    console.log('Transaction committed successfully. New state:', result.snapshot.val());
+        if (isHost && publicGameState?.roomId) {
+            const updates: { [key: string]: any } = {};
+            Object.entries(newState).forEach(([key, value]) => {
+                if (['players', 'chatMessages'].includes(key)) {
+                    updates[`/${key}`] = value;
                 } else {
-                    console.log('Transaction aborted or not committed.');
+                    updates[`/public/${key}`] = value;
                 }
-            }).catch(e => console.error("Update game state failed:", e));
+            });
+            db.ref(`rooms/${publicGameState.roomId}`).update(updates).catch(e => console.error("Update game state failed:", e));
         }
-    }, [isHost, gameState?.roomId]);
+    }, [isHost, publicGameState?.roomId]);
     
     const handleCreateRoom = async (playerName: string, avatar: string | null) => {
         isExitingRef.current = false;
         setIsLoading(true);
         setError(null);
         
-        // --- Database Cleanup ---
-        // Wrap cleanup in setTimeout to ensure Firebase connection is established
-        setTimeout(async () => {
-            try {
-                const allRoomsRef = db.ref('rooms');
-                const snapshot = await allRoomsRef.get();
-                if (snapshot.exists()) {
-                    const allRooms = snapshot.val();
-                    const updates: { [key: string]: null } = {};
-                    for (const roomId in allRooms) {
-                        const room = allRooms[roomId];
-                        // Check if there are any players in the room who are NOT disconnected
-                        const activePlayers = room.players ? Object.values(room.players).filter((p: Player) => p.connectionStatus !== 'disconnected') : [];
-
-                        // Remove rooms with no active (connected) players
-                        if (activePlayers.length === 0) {
-                            updates[`/rooms/${roomId}`] = null;
-                        }
-                    }
-                    if (Object.keys(updates).length > 0) {
-                        await db.ref().update(updates);
+        // --- Database Garbage Collection ---
+        try {
+            const allRoomsRef = db.ref('rooms');
+            const snapshot = await allRoomsRef.get();
+            if (snapshot.exists()) {
+                const allRooms = snapshot.val();
+                const updates: { [key: string]: null } = {};
+                for (const roomId in allRooms) {
+                    const room = allRooms[roomId];
+                    const players = room.players ? Object.values(room.players) : [];
+                    const hasConnectedHumanPlayers = players.some((p: any) => !p.id.startsWith('BOT-') && p.connectionStatus === 'connected');
+                    
+                    if (!hasConnectedHumanPlayers) {
+                        updates[`/rooms/${roomId}`] = null;
+                        console.log(`Marking empty room ${roomId} for deletion.`);
                     }
                 }
-            } catch (e) {
-                console.warn("Cleanup script failed:", e);
-                // Optionally, display a user-facing error if cleanup is critical
-                // setError("Не удалось очистить старые комнаты. Пожалуйста, попробуйте позже.");
+                if (Object.keys(updates).length > 0) {
+                    await db.ref().update(updates);
+                    console.log(`${Object.keys(updates).length} empty rooms deleted.`);
+                }
             }
-        }, 2000); // Delay for 2 seconds to allow Firebase connection to establish
-        // --- End Cleanup ---
+        } catch (e) {
+            console.warn("Garbage collection script failed:", e);
+        }
+        // --- End Garbage Collection ---
 
         const playerId = localPlayerId;
         const authUid = firebaseAuthUid;
@@ -329,12 +348,34 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         const roomId = generateId();
 
         const hostPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: true, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, firebaseAuthUid: authUid };
-        const initialState: GameState = {
-            roomId, hostId: playerId, gamePhase: 'SETUP', players: { [playerId]: hostPlayer },
-            initialSpyCount: 1, votingEnabled: true, questionSource: 'library', familyFriendly: true,
-            noTimer: false, roundLimit: true, showQuestionToSpy: true, anonymousVoting: false,
-            round: 1, usedQuestionIds: [], usedQuestionTexts: [], currentQuestion: null,
-            answers: [], votes: [], chatMessages: [], lastEliminated: null, winner: null, answerTimerEnd: null, voteTimerEnd: null,
+        
+        const initialState = {
+            players: { [playerId]: hostPlayer },
+            public: {
+                roomId,
+                hostId: playerId,
+                gamePhase: 'SETUP',
+                initialSpyCount: 1,
+                votingEnabled: true,
+                questionSource: 'library',
+                familyFriendly: true,
+                noTimer: false,
+                roundLimit: true,
+                showQuestionToSpy: true,
+                anonymousVoting: false,
+                hideAnswerStatus: false,
+                round: 1,
+                usedQuestionIds: [],
+                usedQuestionTexts: [],
+                currentQuestion: null,
+                answers: [],
+                votes: [],
+                lastEliminated: null,
+                winner: null,
+                answerTimerEnd: null,
+                voteTimerEnd: null,
+            },
+            chatMessages: [],
         };
         
         try {
@@ -375,11 +416,11 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
             // --- END GHOST ROOM CLEANUP ---
 
-            const players = Object.values(roomState.players || {}) as Player[];
+            const playersInRoomList = Object.values(roomState.players || {}) as Player[];
     
             // Rejoin Logic (check for disconnected players with the same Firebase Auth UID)
             const rejoiningPlayerAuthUid = firebaseAuthUid;
-            const disconnectedPlayerByAuthUid = players.find(p => p.firebaseAuthUid === rejoiningPlayerAuthUid && p.connectionStatus === 'disconnected');
+            const disconnectedPlayerByAuthUid = playersInRoomList.find(p => p.firebaseAuthUid === rejoiningPlayerAuthUid && p.connectionStatus === 'disconnected');
     
             if (disconnectedPlayerByAuthUid) {
                 const rejoiningPlayerId = disconnectedPlayerByAuthUid.id;
@@ -406,17 +447,17 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
     
             // --- New Player Join Logic ---
-            if (players.some(p => p.name === playerName)) {
+            if (playersInRoomList.some(p => p.name === playerName)) {
                 setError('Игрок с таким именем уже в комнате.');
                 return;
             }
     
-            if (roomState.gamePhase !== 'SETUP') {
+            if (roomState.public.gamePhase !== 'SETUP') {
                 setError('Игра уже началась. Вы не можете присоединиться.');
                 return;
             }
             
-            if (players.length >= 12) {
+            if (playersInRoomList.length >= 12) {
                 setError('Комната заполнена.');
                 return;
             }
@@ -445,17 +486,17 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     };
 
     const handleTransferHost = (newHostId: string) => {
-        if (!isHost || !gameState?.roomId || !localPlayerId) return;
-        const roomRef = db.ref(`rooms/${gameState.roomId}`);
+        if (!isHost || !publicGameState?.roomId || !localPlayerId) return;
+        const roomRef = db.ref(`rooms/${publicGameState.roomId}`);
         roomRef.update({
-            hostId: newHostId,
+            'public/hostId': newHostId,
             [`players/${newHostId}/isHost`]: true,
             [`players/${localPlayerId}/isHost`]: false,
         }).catch(e => console.error("Failed to transfer host:", e));
     };
 
     const startNewRound = useCallback(async (baseState?: GameState) => {
-        const currentState = baseState || gameState;
+        const currentState = baseState || combinedGameState;
         if (!isHost || !currentState) return;
         setIsGenerating(true);
     
@@ -466,7 +507,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         if (newQuestion) {
             let questionWithDynamicAnswers = { ...newQuestion };
             if (questionWithDynamicAnswers.type === 'PLAYERS') {
-                questionWithDynamicAnswers.answers = Object.values(currentState.players).filter((p: Player) => !p.isEliminated).map((p: Player) => p.name);
+                questionWithDynamicAnswers.answers = Object.values(players).filter((p: Player) => !p.isEliminated).map((p: Player) => p.name);
             }
             updateData = {
                 round: currentState.round,
@@ -485,15 +526,15 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         
         setIsGenerating(false);
         updateGameState(updateData);
-    }, [isHost, gameState, updateGameState]);
+    }, [isHost, combinedGameState, players, updateGameState]);
 
     const handleVoteTally = useCallback(() => {
-        if (!isHost || !gameState || gameState.gamePhase !== 'RESULTS_DISCUSSION') return;
+        if (!isHost || !combinedGameState || combinedGameState.gamePhase !== 'RESULTS_DISCUSSION') return;
         
-        const currentActivePlayers = Object.values(gameState.players).filter((p: Player) => !p.isEliminated);
+        const currentActivePlayers = Object.values(players).filter((p: Player) => !p.isEliminated);
         const requiredVotes = Math.ceil(currentActivePlayers.length / 2);
         // Filter out skipped votes AND votes for players who are no longer in the game
-        const actualVotes = gameState.votes.filter(v => v.votedForId !== null && gameState.players[v.votedForId!]);
+        const actualVotes = combinedGameState.votes.filter(v => v.votedForId !== null && players[v.votedForId!]);
         const voteCounts: Record<string, number> = {};
         actualVotes.forEach(vote => { voteCounts[vote.votedForId!] = (voteCounts[vote.votedForId!] || 0) + 1; });
 
@@ -508,32 +549,32 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         }
 
         let eliminatedPlayer: Player | null = null;
-        let newPlayers = { ...gameState.players };
+        let newPlayers = { ...players };
         if (playersToEliminate.length === 1 && maxVotes >= requiredVotes) {
             const eliminatedId = playersToEliminate[0];
             if (newPlayers[eliminatedId]) { // CRITICAL: Check if player exists before attempting to eliminate
                 newPlayers[eliminatedId] = { ...newPlayers[eliminatedId], isEliminated: true };
-                eliminatedPlayer = gameState.players[eliminatedId] || null;
+                eliminatedPlayer = players[eliminatedId] || null;
             }
         }
 
         updateGameState({ players: newPlayers, lastEliminated: eliminatedPlayer, voteTimerEnd: null, gamePhase: 'VOTE_REVEAL' });
-    }, [isHost, gameState, updateGameState]);
+    }, [isHost, combinedGameState, players, updateGameState]);
 
     // Host-side useEffects for phase transitions
     useEffect(() => {
-        if (!isHost || !gameState || gameState.noTimer) return;
+        if (!isHost || !publicGameState || publicGameState.noTimer) return;
         let timer: number | undefined;
 
-        if (gameState.gamePhase === 'ANSWERING' && gameState.answerTimerEnd) {
-            const delay = gameState.answerTimerEnd - Date.now();
+        if (publicGameState.gamePhase === 'ANSWERING' && publicGameState.answerTimerEnd) {
+            const delay = publicGameState.answerTimerEnd - Date.now();
             timer = window.setTimeout(() => {
                 if (gameStateRef.current?.gamePhase === 'ANSWERING') {
-                    updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: gameState.noTimer ? null : Date.now() + activePlayers.length * 10000 });
+                    updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: publicGameState.noTimer ? null : Date.now() + activePlayers.length * 10000 });
                 }
             }, Math.max(0, delay));
-        } else if (gameState.gamePhase === 'RESULTS_DISCUSSION' && gameState.voteTimerEnd) {
-            const delay = gameState.voteTimerEnd - Date.now();
+        } else if (publicGameState.gamePhase === 'RESULTS_DISCUSSION' && publicGameState.voteTimerEnd) {
+            const delay = publicGameState.voteTimerEnd - Date.now();
             timer = window.setTimeout(() => {
                 if (gameStateRef.current?.gamePhase === 'RESULTS_DISCUSSION') {
                     handleVoteTally();
@@ -541,53 +582,53 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }, Math.max(0, delay));
         }
         return () => clearTimeout(timer);
-    }, [isHost, gameState, activePlayers.length, handleVoteTally, updateGameState]);
+    }, [isHost, publicGameState, activePlayers.length, handleVoteTally, updateGameState]);
 
     // Auto-progress when all connected players have answered
     useEffect(() => {
-        if (!isHost || !gameState || gameState.gamePhase !== 'ANSWERING') {
+        if (!isHost || !combinedGameState || combinedGameState.gamePhase !== 'ANSWERING') {
             return;
         }
 
         const connectedActivePlayers = activePlayers.filter(p => p.connectionStatus === 'connected');
         if (connectedActivePlayers.length === 0) return;
 
-        const answeredPlayerIds = new Set(gameState.answers.map(a => a.playerId));
+        const answeredPlayerIds = new Set((combinedGameState.answers || []).map(a => a.playerId));
         const allConnectedAnswered = connectedActivePlayers.every(p => answeredPlayerIds.has(p.id));
 
         if (allConnectedAnswered) {
              const timer = setTimeout(() => {
                 if (gameStateRef.current?.gamePhase === 'ANSWERING') {
-                   updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: gameState.noTimer ? null : Date.now() + activePlayers.length * 10000 });
+                   updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: combinedGameState.noTimer ? null : Date.now() + activePlayers.length * 10000 });
                 }
             }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [isHost, gameState, activePlayers, updateGameState]);
+    }, [isHost, combinedGameState, activePlayers, updateGameState]);
 
     // Auto-progress when all connected players have voted
     useEffect(() => {
-        if (isHost && gameState?.gamePhase === 'RESULTS_DISCUSSION' && gameState.votingEnabled) {
+        if (isHost && combinedGameState?.gamePhase === 'RESULTS_DISCUSSION' && combinedGameState.votingEnabled) {
             const connectedActivePlayers = activePlayers.filter(p => p.connectionStatus === 'connected');
-            if (connectedActivePlayers.length > 0 && gameState.votes.length >= connectedActivePlayers.length) {
+            if (connectedActivePlayers.length > 0 && (combinedGameState.votes ?? []).length >= connectedActivePlayers.length) {
                 handleVoteTally();
             }
         }
-    }, [isHost, gameState, activePlayers, handleVoteTally]);
+    }, [isHost, combinedGameState, activePlayers, handleVoteTally]);
 
     useEffect(() => {
-        if (isHost && gameState?.gamePhase === 'ROLE_REVEAL') {
-            const allAcknowledged = Object.values(gameState.players).every((p: Player) => p.roleAcknowledged || p.isEliminated || p.connectionStatus === 'disconnected');
+        if (isHost && publicGameState?.gamePhase === 'ROLE_REVEAL') {
+            const allAcknowledged = Object.values(players).every((p: Player) => p.roleAcknowledged || p.isEliminated || p.connectionStatus === 'disconnected');
             if (allAcknowledged) {
                 const timer = setTimeout(() => updateGameState({ gamePhase: 'SYNCING_NEXT_ROUND' }), 1000);
                 return () => clearTimeout(timer);
             }
         }
-    }, [isHost, gameState, updateGameState]);
+    }, [isHost, publicGameState, players, updateGameState]);
 
     const handleAction = (path: string, value: any, condition?: (currentData: any) => boolean) => {
-        if (!gameState?.roomId || !localPlayerId) return;
-        const actionRef = db.ref(`rooms/${gameState.roomId}/${path}`);
+        if (!publicGameState?.roomId || !localPlayerId) return;
+        const actionRef = db.ref(`rooms/${publicGameState.roomId}/${path}`);
         actionRef.transaction((currentData) => {
             if(condition && condition(currentData)) {
                 return; // Abort transaction
@@ -600,9 +641,9 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     };
     
     const handleGameStart = (spyCount: number, source: QuestionSource, familyMode: boolean) => {
-        if (!isHost || !gameState) return;
+        if (!isHost || !players) return;
 
-        const playerList = Object.values({ ...gameState.players }) as Player[];
+        const playerList = Object.values({ ...players }) as Player[];
         const playerIds = playerList.map(p => p.id);
 
         const spyIds = new Set<string>(forcedSpies);
@@ -619,7 +660,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
         }
 
-        const newPlayers = { ...gameState.players };
+        const newPlayers = { ...players };
         Object.keys(newPlayers).forEach(id => {
             newPlayers[id] = { ...newPlayers[id], isSpy: spyIds.has(id), roleAcknowledged: false };
         });
@@ -630,57 +671,57 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     };
 
     const handleAcknowledgeRole = () => {
-        if (!gameState?.roomId || !localPlayerId) return;
-        db.ref(`rooms/${gameState.roomId}/players/${localPlayerId}/roleAcknowledged`).set(true)
+        if (!publicGameState?.roomId || !localPlayerId) return;
+        db.ref(`rooms/${publicGameState.roomId}/players/${localPlayerId}/roleAcknowledged`).set(true)
             .catch(e => console.error("Firebase set roleAcknowledged error:", e));
     };
 
     const handleRoleRevealContinue = () => {
-        if (!isHost || !gameState) return;
-        const allAcknowledged = Object.values(gameState.players).every((p: Player) => p.roleAcknowledged || p.isEliminated || p.connectionStatus === 'disconnected');
+        if (!isHost || !players) return;
+        const allAcknowledged = Object.values(players).every((p: Player) => p.roleAcknowledged || p.isEliminated || p.connectionStatus === 'disconnected');
 
         if (allAcknowledged) {
             updateGameState({ gamePhase: 'SYNCING_NEXT_ROUND' });
         } else {
-            startNewRound(gameState);
+            startNewRound(combinedGameState!);
         }
     };
 
-    const handleAnswerSubmit = (answer: string) => handleAction('answers', { playerId: localPlayerId, answer }, 
+    const handleAnswerSubmit = (answer: string) => handleAction('public/answers', { playerId: localPlayerId, answer }, 
         (current) => current?.some((a: Answer) => a.playerId === localPlayerId));
 
-    const handleVoteSubmit = (votedForId: string | null) => handleAction('votes', { voterId: localPlayerId, votedForId },
+    const handleVoteSubmit = (votedForId: string | null) => handleAction('public/votes', { voterId: localPlayerId, votedForId },
         (current) => current?.some((v: Vote) => v.voterId === localPlayerId));
 
     const handleVoteRevealFinished = async () => {
-        if (!isHost || !gameState) return;
-        const winner = checkWinConditions(Object.values(gameState.players));
-        const initialPlayerCount = Object.keys(gameState.players).length;
-        if (winner || (gameState.roundLimit && gameState.round >= initialPlayerCount - 1)) {
+        if (!isHost || !combinedGameState) return;
+        const winner = checkWinConditions(Object.values(players));
+        const initialPlayerCount = Object.keys(players).length;
+        if (winner || (combinedGameState.roundLimit && combinedGameState.round >= initialPlayerCount - 1)) {
             updateGameState({ winner: winner || 'SPIES', gamePhase: 'GAME_OVER' });
         } else {
-            const newPlayers = { ...gameState.players };
+            const newPlayers = { ...players };
             Object.keys(newPlayers).forEach(id => newPlayers[id].readyForNextRound = false);
             updateGameState({ players: newPlayers, gamePhase: 'SYNCING_NEXT_ROUND' });
         }
     };
     
     const handleReadyForNextRound = useCallback(() => {
-        if (gameState?.roomId && localPlayerId) {
-            const playerReadyRef = db.ref(`rooms/${gameState.roomId}/players/${localPlayerId}/readyForNextRound`);
+        if (publicGameState?.roomId && localPlayerId) {
+            const playerReadyRef = db.ref(`rooms/${publicGameState.roomId}/players/${localPlayerId}/readyForNextRound`);
             playerReadyRef.set(true).catch(e => console.error("Firebase set readyForNextRound error:", e));
         }
-    }, [gameState?.roomId, localPlayerId]);
+    }, [publicGameState?.roomId, localPlayerId]);
 
     const handleContinueToNextRound = useCallback(() => {
-        if (!isHost || !gameState) return;
-        const nextRoundState = { ...gameState, round: gameState.round + 1 };
+        if (!isHost || !combinedGameState) return;
+        const nextRoundState = { ...combinedGameState, round: combinedGameState.round + 1 };
         startNewRound(nextRoundState);
-    }, [isHost, gameState, startNewRound]);
+    }, [isHost, combinedGameState, startNewRound]);
 
     const handleReplay = async () => {
-        if (!isHost || !gameState) return;
-        const newPlayers = { ...gameState.players };
+        if (!isHost || !players) return;
+        const newPlayers = { ...players };
         
         // Do not filter out disconnected players here, as they should be able to rejoin the new game.
         // The cleanup logic in handleCreateRoom will handle truly dead rooms.
@@ -710,20 +751,20 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     };
 
     const handleSendMessage = (text: string) => {
-        if (!localPlayer || !gameState?.roomId) return;
+        if (!localPlayer || !publicGameState?.roomId) return;
         const message: ChatMessage = { senderId: localPlayer.id, senderName: localPlayer.name, senderAvatar: localPlayer.avatar || null, text, timestamp: firebase.database.ServerValue.TIMESTAMP as any, status: 'sent' };
-        db.ref(`rooms/${gameState.roomId}/chatMessages`).push(message).catch(e => console.error("Failed to send message:", e));
+        db.ref(`rooms/${publicGameState.roomId}/chatMessages`).push(message).catch(e => console.error("Failed to send message:", e));
     };
 
     const handleChatOpen = useCallback(() => {
-        if (!gameState?.roomId || !localPlayerId || !gameState.chatMessages || Array.isArray(gameState.chatMessages)) {
+        if (!publicGameState?.roomId || !localPlayerId || !chatMessages || Array.isArray(chatMessages)) {
             return;
         }
 
-        const chatMessagesRef = db.ref(`rooms/${gameState.roomId}/chatMessages`);
+        const chatMessagesRef = db.ref(`rooms/${publicGameState.roomId}/chatMessages`);
         const updates: { [key: string]: 'read' } = {};
 
-        const messageRecord = gameState.chatMessages as Record<string, ChatMessage>;
+        const messageRecord = chatMessages as unknown as Record<string, ChatMessage>;
 
         for (const messageKey in messageRecord) {
             const message = messageRecord[messageKey];
@@ -735,11 +776,11 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         if (Object.keys(updates).length > 0) {
             chatMessagesRef.update(updates).catch(e => console.error("Failed to update chat status:", e));
         }
-    }, [gameState, localPlayerId]);
+    }, [publicGameState, localPlayerId, chatMessages]);
     
     const handleKickPlayer = (playerId: string) => {
-        if (isHost && gameState?.roomId) {
-            const playerRef = db.ref(`rooms/${gameState.roomId}/players/${playerId}`);
+        if (isHost && publicGameState?.roomId) {
+            const playerRef = db.ref(`rooms/${publicGameState.roomId}/players/${playerId}`);
             playerRef.remove().catch(e => console.error("Failed to kick player:", e));
         }
     };
@@ -750,22 +791,22 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             if (newSet.has(playerId)) {
                 newSet.delete(playerId);
             } else {
-                if (newSet.size < (gameState?.initialSpyCount || 1)) {
+                if (newSet.size < (publicGameState?.initialSpyCount || 1)) {
                     newSet.add(playerId);
                 } else {
-                    alert(`Вы можете выбрать не более ${gameState?.initialSpyCount} шпионов.`);
+                    alert(`Вы можете выбрать не более ${publicGameState?.initialSpyCount} шпионов.`);
                 }
             }
             return newSet;
         });
-    }, [gameState?.initialSpyCount]);
+    }, [publicGameState?.initialSpyCount]);
 
     useEffect(() => {
-        if (!isHost || !gameState || gameState.gamePhase !== 'SYNCING_NEXT_ROUND') {
+        if (!isHost || !publicGameState || publicGameState.gamePhase !== 'SYNCING_NEXT_ROUND') {
             return;
         }
 
-        const activePlayers = Object.values(gameState.players).filter((p: Player) => !p.isEliminated);
+        const activePlayers = Object.values(players).filter((p: Player) => !p.isEliminated);
         const connectedActivePlayers = activePlayers.filter((p: Player) => p.connectionStatus !== 'disconnected');
 
         if (connectedActivePlayers.length === 0 && activePlayers.length > 0) {
@@ -782,17 +823,17 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
             return () => clearTimeout(timer);
         }
-    }, [isHost, gameState, handleContinueToNextRound]);
+    }, [isHost, publicGameState, players, handleContinueToNextRound]);
 
     if (isLoading || !isAuthReady) return <LoadingScreen title="Подключение..." />;
     if (error) return <div className="flex flex-col items-center justify-center text-center min-h-[450px]"><h2 className="text-3xl font-bold text-red-500 mb-4">Ошибка</h2><p className="text-slate-300 mb-8">{error}</p><button onClick={() => handleLeaveRoom(true)} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-3 px-8 rounded-lg text-xl">Вернуться в меню</button></div>;
-    if (!gameState || !localPlayerId) return <LobbyScreen onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} initialRoomId={rememberedRoomId} />;
+    if (!publicGameState.roomId || !localPlayerId) return <LobbyScreen onCreateRoom={handleCreateRoom} onJoinRoom={handleJoinRoom} initialRoomId={rememberedRoomId} />;
 
     const renderGameScreen = () => {
         if (isGenerating) return <LoadingScreen title="ИИ генерирует вопрос..." description="Это может занять несколько секунд." />;
 
-        switch (gameState.gamePhase) {
-            case 'SETUP': return <SetupScreen onGameStart={handleGameStart} players={playerList} isHost={isHost} roomId={gameState.roomId!} initialSettings={gameState} onSettingsChange={(s) => updateGameState(s as GameState)} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} forcedSpies={forcedSpies} />;
+        switch (publicGameState.gamePhase) {
+            case 'SETUP': return <SetupScreen onGameStart={handleGameStart} players={playerList} isHost={isHost} roomId={publicGameState.roomId!} initialSettings={combinedGameState!} onSettingsChange={(s) => updateGameState(s as GameState)} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} forcedSpies={forcedSpies} />;
             case 'ROLE_REVEAL': return <RoleRevealScreen player={localPlayer} onContinue={handleRoleRevealContinue} isHost={isHost} isLocalMode={false} players={playerList} onAcknowledgeRole={handleAcknowledgeRole} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} />;
             case 'SYNCING_NEXT_ROUND': 
                 return <NextRoundSyncScreen 
@@ -804,21 +845,21 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                     onKickPlayer={handleKickPlayer}
                     onTransferHost={handleTransferHost}
                 />;
-            case 'ANSWERING': return <AnsweringScreen player={localPlayer} players={activePlayers} question={gameState.currentQuestion!} answers={gameState.answers} onSubmit={handleAnswerSubmit} timerEnd={gameState.answerTimerEnd} isLocalMode={false} isHost={isHost} noTimer={gameState.noTimer} onForceEndAnswering={() => updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: gameState.noTimer ? null : Date.now() + activePlayers.length * 10000 })} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={gameState.showQuestionToSpy} hideAnswerStatus={gameState.hideAnswerStatus} />;
-            case 'RESULTS_DISCUSSION': return <ResultsDiscussionScreen question={gameState.currentQuestion!} players={playerList} answers={gameState.answers} onVote={handleVoteSubmit} onTally={handleVoteTally} votingEnabled={gameState.votingEnabled} localPlayerId={localPlayerId} votes={gameState.votes} timerEnd={gameState.voteTimerEnd} isHost={isHost} isLocalMode={false} noTimer={gameState.noTimer} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={gameState.showQuestionToSpy} revealVotes={isKonamiActive} />;
-            case 'VOTE_REVEAL': return <VoteRevealScreen eliminatedPlayer={gameState.lastEliminated} votes={gameState.votes} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={gameState.anonymousVoting} revealSpies={isKonamiActive} />;
-            case 'GAME_OVER': return <GameOverScreen winner={gameState.winner!} players={playerList} onNewGame={() => handleLeaveRoom(true)} onReplay={handleReplay} isHost={isHost} isLocalMode={false} />;
+            case 'ANSWERING': return <AnsweringScreen player={localPlayer} players={activePlayers} question={publicGameState.currentQuestion!} answers={publicGameState.answers as Answer[]} onSubmit={handleAnswerSubmit} timerEnd={publicGameState.answerTimerEnd} isLocalMode={false} isHost={isHost} noTimer={publicGameState.noTimer} onForceEndAnswering={() => updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: publicGameState.noTimer ? null : Date.now() + activePlayers.length * 10000 })} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={publicGameState.showQuestionToSpy} hideAnswerStatus={publicGameState.hideAnswerStatus} />;
+            case 'RESULTS_DISCUSSION': return <ResultsDiscussionScreen question={publicGameState.currentQuestion!} players={playerList} answers={(publicGameState.answers ?? []) as Answer[]} onVote={handleVoteSubmit} onTally={handleVoteTally} votingEnabled={publicGameState.votingEnabled} localPlayerId={localPlayerId} votes={(publicGameState.votes ?? []) as Vote[]} timerEnd={publicGameState.voteTimerEnd} isHost={isHost} isLocalMode={false} noTimer={publicGameState.noTimer} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={publicGameState.showQuestionToSpy} revealVotes={isKonamiActive} />;
+            case 'VOTE_REVEAL': return <VoteRevealScreen eliminatedPlayer={publicGameState.lastEliminated} votes={publicGameState.votes as Vote[]} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={publicGameState.anonymousVoting} revealSpies={isKonamiActive} />;
+            case 'GAME_OVER': return <GameOverScreen winner={publicGameState.winner!} players={playerList} onNewGame={() => handleLeaveRoom(true)} onReplay={handleReplay} isHost={isHost} isLocalMode={false} />;
             default: return <div>Загрузка...</div>;
         }
     };
     
     return (
         <>
-            {localPlayer && (gameState.gamePhase === 'SETUP' || gameState.gamePhase === 'ROLE_REVEAL' || !localPlayer.isEliminated) && (
-                <Chat localPlayer={localPlayer} messages={chatMessages} onSendMessage={handleSendMessage} onChatOpen={handleChatOpen} />
+            {localPlayer && (publicGameState.gamePhase === 'SETUP' || publicGameState.gamePhase === 'ROLE_REVEAL' || !localPlayer.isEliminated) && (
+                <Chat localPlayer={localPlayer} messages={memoizedChatMessages} onSendMessage={handleSendMessage} onChatOpen={handleChatOpen} />
             )}
             {renderGameScreen()}
-            {isDebugMenuOpen && gameState && <DebugMenu gameState={gameState} onClose={closeDebugMenu} forcedSpies={forcedSpies} onToggleForceSpy={handleToggleForceSpy} isHost={isHost} />}
+            {isDebugMenuOpen && combinedGameState && <DebugMenu gameState={combinedGameState} onClose={closeDebugMenu} forcedSpies={forcedSpies} onToggleForceSpy={handleToggleForceSpy} isHost={isHost} />}
         </>
     );
 });
