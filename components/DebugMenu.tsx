@@ -40,17 +40,16 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         const fakePlayerIds = gameState.players ? Object.keys(gameState.players).filter(id => id.startsWith('BOT-')) : [];
 
         fakePlayerIds.forEach(botId => {
-            const bot = gameState.players[botId];
-            if (!bot) return;
+            const botState = gameState.players[botId];
+            if (!botState) return;
 
-            if (gameState.gamePhase === 'ROLE_REVEAL' && !bot.roleAcknowledged) {
+            if (gameState.gamePhase === 'ROLE_REVEAL' && !botState.roleAcknowledged) {
                 updates[`/rooms/${gameState.roomId}/players/${botId}/roleAcknowledged`] = true;
                 shouldUpdate = true;
             }
         });
 
         if (shouldUpdate) {
-            // FIX: Replaced ref() and update() with v8 `db.ref()` and `ref.update()`.
             db.ref().update(updates);
         }
     }, [gameState, isHost]);
@@ -75,17 +74,31 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
             counter++;
         }
         const avatar = RANDOM_AVATARS[Math.floor(Math.random() * RANDOM_AVATARS.length)];
-        // FIX: Replaced serverTimestamp() with v8 `firebase.database.ServerValue.TIMESTAMP`.
-        const newPlayer: Player = { id: playerId, name, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, roleAcknowledged: false, readyForNextRound: false };
-        // FIX: Replaced ref() and set() with v8 `db.ref()` and `ref.set()`.
-        const playerRef = db.ref(`rooms/${gameState.roomId}/players/${playerId}`);
-        playerRef.set(newPlayer);
+        
+        const newProfile = { id: playerId, name, avatar, firebaseAuthUid: 'FAKE_AUTH_UID_' + generateId() };
+        const newState: Omit<Player, 'name' | 'avatar' | 'firebaseAuthUid'> = { 
+            id: playerId, 
+            isSpy: false, 
+            isEliminated: false, 
+            isHost: false, 
+            connectionStatus: 'connected', 
+            joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, 
+            roleAcknowledged: false, 
+            readyForNextRound: false 
+        };
+
+        const updates: { [key: string]: any } = {};
+        updates[`rooms/${gameState.roomId}/playerProfiles/${playerId}`] = newProfile;
+        updates[`rooms/${gameState.roomId}/players/${playerId}`] = newState;
+        
+        db.ref().update(updates);
     };
 
     const removeFakePlayer = (botId: string) => {
-        // FIX: Replaced ref() and remove() with v8 `db.ref()` and `ref.remove()`.
-        const playerRef = db.ref(`rooms/${gameState.roomId}/players/${botId}`);
-        playerRef.remove();
+        const updates: { [key: string]: null } = {};
+        updates[`rooms/${gameState.roomId}/playerProfiles/${botId}`] = null;
+        updates[`rooms/${gameState.roomId}/players/${botId}`] = null;
+        db.ref().update(updates);
     };
 
     const getConnectedBots = (includeEliminated = false) => {
@@ -99,15 +112,23 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
     const handleBulkMessage = () => getConnectedBots(true).forEach(bot => sendRandomMessage(bot));
     const handleBulkAnswer = () => { if (gameState.gamePhase === 'ANSWERING') getConnectedBots().forEach(bot => sendRandomAnswer(bot.id)); };
     const handleBulkVote = () => { if (gameState.gamePhase === 'RESULTS_DISCUSSION' && gameState.votingEnabled) getConnectedBots().forEach(bot => sendRandomVote(bot.id)); };
-    const handleBulkReady = () => { if (gameState.gamePhase !== 'SYNCING_NEXT_ROUND' || !gameState.roomId) return; const updates: { [key: string]: boolean } = {}; getConnectedBots().forEach(bot => { if (!bot.readyForNextRound) updates[`/rooms/${gameState.roomId}/players/${bot.id}/readyForNextRound`] = true; }); if (Object.keys(updates).length > 0) db.ref().update(updates); };
+    const handleBulkReady = () => { 
+        if (gameState.gamePhase !== 'SYNCING_NEXT_ROUND' || !gameState.roomId) return; 
+        const updates: { [key: string]: boolean } = {}; 
+        getConnectedBots().forEach(bot => { 
+            // bot here is already a combined Player object from gameState.players and gameState.playerProfiles
+            if (!bot.readyForNextRound) updates[`/rooms/${gameState.roomId}/players/${bot.id}/readyForNextRound`] = true; 
+        }); 
+        if (Object.keys(updates).length > 0) db.ref().update(updates); 
+    };
     const handleBulkKick = () => getConnectedBots(true).forEach(bot => removeFakePlayer(bot.id));
-    const toggleConnection = (botId: string, currentStatus: 'connected' | 'disconnected' | undefined) => db.ref(`rooms/${gameState.roomId}/players/${botId}/connectionStatus`).set(currentStatus === 'connected' ? 'disconnected' : 'connected');
+    const toggleConnection = (botId: string, currentStatus: 'connected' | 'disconnected' | undefined) => {
+        db.ref(`rooms/${gameState.roomId}/players/${botId}/connectionStatus`).set(currentStatus === 'connected' ? 'disconnected' : 'connected');
+    };
 
     const sendRandomMessage = (bot: Player) => {
         const messageText = RANDOM_MESSAGES[Math.floor(Math.random() * RANDOM_MESSAGES.length)];
-        // FIX: Replaced serverTimestamp() with v8 `firebase.database.ServerValue.TIMESTAMP`.
         const message: ChatMessage = { senderId: bot.id, senderName: bot.name, senderAvatar: bot.avatar, text: messageText, timestamp: firebase.database.ServerValue.TIMESTAMP as any, status: 'sent' };
-        // FIX: Replaced ref() and push() with v8 `db.ref()` and `ref.push()`.
         db.ref(`rooms/${gameState.roomId}/chatMessages`).push(message);
     };
 
@@ -116,7 +137,6 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         const answerOptions = gameState.currentQuestion.answers;
         if (!answerOptions || answerOptions.length === 0) return;
         const randomAnswer = answerOptions[Math.floor(Math.random() * answerOptions.length)];
-        // FIX: Replaced ref() and runTransaction() with v8 `db.ref()` and `ref.transaction()`.
         db.ref(`rooms/${gameState.roomId}/public/answers`).transaction((currentData: Answer[] | null) => {
             const newAnswer = { playerId: botId, answer: randomAnswer }; if (!currentData) return [newAnswer]; if (currentData.some(a => a.playerId === botId)) return; return [...currentData, newAnswer];
         });
@@ -128,7 +148,6 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         if (activePlayers.length === 0) return;
         const shouldSkip = Math.random() < 0.1; let votedForId: string | null = null;
         if (!shouldSkip) votedForId = activePlayers[Math.floor(Math.random() * activePlayers.length)].id;
-        // FIX: Replaced ref() and runTransaction() with v8 `db.ref()` and `ref.transaction()`.
         db.ref(`rooms/${gameState.roomId}/public/votes`).transaction((currentData: Vote[] | null) => {
             const newVote = { voterId: botId, votedForId }; if (!currentData) return [newVote]; if (currentData.some(v => v.voterId === botId)) return; return [...currentData, newVote];
         });
