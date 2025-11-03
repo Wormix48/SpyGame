@@ -429,7 +429,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
                                 }
 
-                                updates[`/rooms/${roomId}`] = null;
+                                updates[`rooms/${roomId}`] = null;
 
                             }
 
@@ -485,51 +485,27 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
                     const hostProfile = { id: playerId, name: playerName, avatar, firebaseAuthUid: authUid };
 
-    
-
                     const hostState: Omit<Player, 'name' | 'avatar' | 'firebaseAuthUid'> = { 
-
-    
 
                         id: playerId, 
 
-    
-
                         isSpy: false, 
-
-    
 
                         isEliminated: false, 
 
-    
-
                         isHost: true, 
-
-    
 
                         connectionStatus: 'connected', 
 
-    
-
                         joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any 
-
-    
 
                     };
 
-    
-
                     
-
-    
 
                     const initialState = {
 
-    
-
                         playerProfiles: { [playerId]: hostProfile },
-
-    
 
                         players: { [playerId]: hostState },
 
@@ -933,47 +909,239 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
         
 
-                            if (playerProfilesInRoom.length >= 12) {
+                                                        if (playerProfilesInRoom.length >= 12) {
 
         
 
-                                setError('Комната заполнена.');
+                            
 
         
 
-                                return;
+                                    
 
         
 
-                            }
+                            
 
         
 
-                const playerId = localPlayerId;
-
-                const authUid = firebaseAuthUid;
-
-                if (!playerId || !authUid) {
-
-                    setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
-
-                    setIsLoading(false);
-
-                    return;
-
-                }
-
-                const newPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, firebaseAuthUid: authUid };
-
-                const playerRef = db.ref(`rooms/${upperRoomId}/players/${playerId}`);
-
-                await playerRef.set(newPlayer);
-
-                await db.ref(`rooms/${upperRoomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP as any);
+                                                            setError('Комната заполнена.');
 
         
 
-                    setLocalPlayerId(playerId);
+                            
+
+        
+
+                                    
+
+        
+
+                            
+
+        
+
+                                                            return;
+
+        
+
+                            
+
+        
+
+                                    
+
+        
+
+                            
+
+        
+
+                                                        }
+
+        
+
+                            
+
+        
+
+                                    
+
+        
+
+                            
+
+        
+
+                                            const playerId = localPlayerId;
+
+        
+
+                            
+
+        
+
+                                            const authUid = firebaseAuthUid;
+
+        
+
+                            
+
+        
+
+                                            if (!playerId || !authUid) {
+
+        
+
+                            
+
+        
+
+                                                setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
+
+        
+
+                            
+
+        
+
+                                                setIsLoading(false);
+
+        
+
+                            
+
+        
+
+                                                return;
+
+        
+
+                            
+
+        
+
+                                            }
+
+        
+
+                            
+
+        
+
+                                            const newPlayerProfile = { id: playerId, name: playerName, avatar, firebaseAuthUid: authUid };
+
+        
+
+                            
+
+        
+
+                                            const newPlayerState: Omit<Player, 'name' | 'avatar' | 'firebaseAuthUid'> = { 
+
+        
+
+                            
+
+        
+
+                                                id: playerId, 
+
+        
+
+                            
+
+        
+
+                                                isSpy: false, 
+
+        
+
+                            
+
+        
+
+                                                isEliminated: false, 
+
+        
+
+                            
+
+        
+
+                                                isHost: false, 
+
+        
+
+                            
+
+        
+
+                                                connectionStatus: 'connected', 
+
+        
+
+                            
+
+        
+
+                                                joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any 
+
+        
+
+                            
+
+        
+
+                                            };
+
+        
+
+                            
+
+        
+
+                                            
+
+        
+
+                            
+
+        
+
+                                            await db.ref(`rooms/${upperRoomId}/playerProfiles/${playerId}`).set(newPlayerProfile);
+
+        
+
+                            
+
+        
+
+                                            await db.ref(`rooms/${upperRoomId}/players/${playerId}`).set(newPlayerState);
+
+        
+
+                            
+
+        
+
+                                            await db.ref(`rooms/${upperRoomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP as any);
+
+        
+
+                            
+
+        
+
+                                    
+
+        
+
+                            
+
+        
+
+                                                setLocalPlayerId(playerId);
 
                     subscribeToGameState(upperRoomId, playerId);
 
@@ -1016,7 +1184,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         if (newQuestion) {
             let questionWithDynamicAnswers = { ...newQuestion };
             if (questionWithDynamicAnswers.type === 'PLAYERS') {
-                questionWithDynamicAnswers.answers = Object.values(players).filter((p: Player) => !p.isEliminated).map((p: Player) => p.name);
+                questionWithDynamicAnswers.answers = Object.values(currentState.players).filter((p: Player) => !p.isEliminated).map((p: Player) => p.name);
             }
             updateData = {
                 round: currentState.round,
@@ -1065,7 +1233,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
         }
 
-        let eliminatedPlayer: Player | null = null;
+        let eliminatedPlayerId: string | null = null;
         let updates: { [key: string]: any } = {
             '/public/lastEliminated': null,
             '/public/voteTimerEnd': null,
@@ -1078,8 +1246,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             const eliminatedId = playersToEliminate[0];
             if (players[eliminatedId]) { // CRITICAL: Check if player exists
                 updates[`/players/${eliminatedId}/isEliminated`] = true;
-                eliminatedPlayer = players[eliminatedId] || null;
-                updates['/public/lastEliminated'] = eliminatedPlayer;
+                eliminatedPlayerId = eliminatedId;
+                updates['/public/lastEliminated'] = eliminatedPlayerId;
             }
         }
 
@@ -1421,7 +1589,9 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 />;
             case 'ANSWERING': return <AnsweringScreen player={localPlayer} players={activePlayers} question={publicGameState.currentQuestion!} answers={publicGameState.answers as Answer[]} onSubmit={handleAnswerSubmit} timerEnd={publicGameState.answerTimerEnd} isLocalMode={false} isHost={isHost} noTimer={publicGameState.noTimer} onForceEndAnswering={() => updateGameState({ gamePhase: 'RESULTS_DISCUSSION', votes: [], voteTimerEnd: publicGameState.noTimer ? null : Date.now() + activePlayers.length * 10000 })} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={publicGameState.showQuestionToSpy} hideAnswerStatus={publicGameState.hideAnswerStatus} />;
             case 'RESULTS_DISCUSSION': return <ResultsDiscussionScreen question={publicGameState.currentQuestion!} players={playerList} answers={(publicGameState.answers ?? []) as Answer[]} onVote={handleVoteSubmit} onTally={handleVoteTally} votingEnabled={publicGameState.votingEnabled} localPlayerId={localPlayerId} votes={(publicGameState.votes ?? []) as Vote[]} timerEnd={publicGameState.voteTimerEnd} isHost={isHost} isLocalMode={false} noTimer={publicGameState.noTimer} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} showQuestionToSpy={publicGameState.showQuestionToSpy} revealVotes={isKonamiActive} />;
-            case 'VOTE_REVEAL': return <VoteRevealScreen eliminatedPlayer={publicGameState.lastEliminated} votes={(publicGameState.votes ?? []) as Vote[]} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={publicGameState.anonymousVoting} revealSpies={isKonamiActive} />;
+            case 'VOTE_REVEAL': 
+                const eliminatedPlayer = playerList.find(p => p.id === publicGameState.lastEliminated) || null;
+                return <VoteRevealScreen eliminatedPlayer={eliminatedPlayer} votes={(publicGameState.votes ?? []) as Vote[]} players={playerList} onContinue={handleVoteRevealFinished} isHost={isHost} isLocalMode={false} anonymousVoting={publicGameState.anonymousVoting} revealSpies={isKonamiActive} />;
             case 'GAME_OVER': return <GameOverScreen winner={publicGameState.winner!} players={playerList} onNewGame={() => handleLeaveRoom(true)} onReplay={handleReplay} isHost={isHost} isLocalMode={false} />;
             default: return <div>Загрузка...</div>;
         }
