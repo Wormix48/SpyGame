@@ -776,8 +776,16 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         
         const currentActivePlayers = Object.values(players).filter((p: Player) => !p.isEliminated);
         const requiredVotes = Math.ceil(currentActivePlayers.length / 2);
-        // Filter out skipped votes AND votes for players who are no longer in the game
-        const actualVotes = (combinedGameState.votes ?? []).filter(v => v.votedForId !== null && players[v.votedForId!]);
+
+        // FIX: Filter out votes from or for players who no longer exist (e.g., were kicked).
+        const currentVotes = combinedGameState.votes ?? [];
+        const validPlayerIds = new Set(Object.keys(players));
+        const cleanVotes = currentVotes.filter(vote => 
+            validPlayerIds.has(vote.voterId) && 
+            (vote.votedForId === null || validPlayerIds.has(vote.votedForId))
+        );
+
+        const actualVotes = cleanVotes.filter(v => v.votedForId !== null);
         const voteCounts: Record<string, number> = {};
         actualVotes.forEach(vote => { voteCounts[vote.votedForId!] = (voteCounts[vote.votedForId!] || 0) + 1; });
 
@@ -797,6 +805,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             '/public/voteTimerEnd': null,
             '/public/gamePhase': 'VOTE_REVEAL',
             '/public/lastActivityTimestamp': firebase.database.ServerValue.TIMESTAMP,
+            '/public/votes': cleanVotes, // Persist the cleaned votes array
         };
 
         if (playersToEliminate.length === 1 && maxVotes >= requiredVotes) {
