@@ -296,226 +296,429 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         };
     }, []);
 
-    const updateGameState = useCallback((newState: Partial<GameState>) => {
-        if (isHost && publicGameState?.roomId) {
-            const updates: { [key: string]: any } = {};
-            Object.entries(newState).forEach(([key, value]) => {
-                if (['players', 'chatMessages'].includes(key)) {
-                    updates[`/${key}`] = value;
-                } else {
-                    updates[`/public/${key}`] = value;
-                }
-            });
-            db.ref(`rooms/${publicGameState.roomId}`).update(updates).catch(e => console.error("Update game state failed:", e));
-        }
-    }, [isHost, publicGameState?.roomId]);
-    
-    const handleCreateRoom = async (playerName: string, avatar: string | null) => {
-        isExitingRef.current = false;
-        setIsLoading(true);
-        setError(null);
+        const updateGameState = useCallback((newState: Partial<GameState>) => {
+
+            if (isHost && publicGameState?.roomId) {
+
+                const updates: { [key: string]: any } = {};
+
+                Object.entries(newState).forEach(([key, value]) => {
+
+                    if (['players', 'chatMessages'].includes(key)) {
+
+                        updates[`/${key}`] = value;
+
+                    } else {
+
+                        updates[`/public/${key}`] = value;
+
+                    }
+
+                });
+
+                updates['/public/lastActivityTimestamp'] = firebase.database.ServerValue.TIMESTAMP;
+
+                db.ref(`rooms/${publicGameState.roomId}`).update(updates).catch(e => console.error("Update game state failed:", e));
+
+            }
+
+        }, [isHost, publicGameState?.roomId]);
+
         
 
-        // --- Database Garbage Collection ---
+        const handleCreateRoom = async (playerName: string, avatar: string | null) => {
 
-        try {
+            isExitingRef.current = false;
 
-            const allRoomsRef = db.ref('rooms');
+            setIsLoading(true);
 
-            const snapshot = await allRoomsRef.get();
+            setError(null);
 
-            if (snapshot.exists()) {
+            
 
-                const allRooms = snapshot.val();
+            // --- Database Garbage Collection ---
 
-                const updates: { [key: string]: null } = {};
+            try {
 
-                for (const roomId in allRooms) {
+                const isConnected = (await db.ref('.info/connected').get()).val();
 
-                    const room = allRooms[roomId];
+                if (isConnected) {
 
-                    const players = room.players ? Object.values(room.players) : [];
+                    const allRoomsRef = db.ref('rooms');
 
-                    const hasConnectedHumanPlayers = players.some((p: any) => !p.id.startsWith('BOT-') && p.connectionStatus === 'connected');
+                    const snapshot = await allRoomsRef.get();
 
-                    
+                    if (snapshot.exists()) {
 
-                    if (!hasConnectedHumanPlayers) {
+                        const allRooms = snapshot.val();
 
-                        updates[`/rooms/${roomId}`] = null;
+                        const updates: { [key: string]: null } = {};
 
-                        console.log(`Marking empty room ${roomId} for deletion.`);
+                        const oneHourAgo = Date.now() - (60 * 60 * 1000);
+
+    
+
+                        for (const roomId in allRooms) {
+
+                            const room = allRooms[roomId];
+
+                            const players = room.players ? Object.values(room.players) : [];
+
+                            const hasConnectedHumanPlayers = players.some((p: any) => !p.id.startsWith('BOT-') && p.connectionStatus === 'connected');
+
+                            const lastActivity = room.public?.lastActivityTimestamp;
+
+    
+
+                            // Delete if no connected players, OR if there are "connected" players but the room has been inactive for over an hour.
+
+                            if (!hasConnectedHumanPlayers || (lastActivity && lastActivity < oneHourAgo)) {
+
+                                if (lastActivity && lastActivity < oneHourAgo) {
+
+                                    console.log(`Marking stale room ${roomId} for deletion (last activity was at ${new Date(lastActivity).toISOString()}).`);
+
+                                } else {
+
+                                    console.log(`Marking empty room ${roomId} for deletion.`);
+
+                                }
+
+                                updates[`/rooms/${roomId}`] = null;
+
+                            }
+
+                        }
+
+                        if (Object.keys(updates).length > 0) {
+
+                            await db.ref().update(updates);
+
+                            console.log(`${Object.keys(updates).length} empty/stale rooms deleted.`);
+
+                        }
 
                     }
 
                 }
 
-                if (Object.keys(updates).length > 0) {
+                 else {
 
-                    await db.ref().update(updates);
-
-                    console.log(`${Object.keys(updates).length} empty rooms deleted.`);
+                    console.log("Skipping garbage collection, client is offline.");
 
                 }
 
+            } catch (e) {
+
+                console.warn("Garbage collection script failed:", e);
+
             }
 
-        } catch (e) {
+            // --- End Garbage Collection ---
 
-            console.warn("Garbage collection script failed:", e);
+    
 
-        }
+    
 
-        // --- End Garbage Collection ---
+    
 
+            const playerId = localPlayerId;        const authUid = firebaseAuthUid;
 
-
-        const playerId = localPlayerId;        const authUid = firebaseAuthUid;
-        if (!playerId || !authUid) {
-            setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
-            setIsLoading(false);
-            return;
-        }
-        const roomId = generateId();
-
-        const hostPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: true, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, firebaseAuthUid: authUid };
-        
-        const initialState = {
-            players: { [playerId]: hostPlayer },
-            public: {
-                roomId,
-                hostId: playerId,
-                gamePhase: 'SETUP',
-                initialSpyCount: 1,
-                votingEnabled: true,
-                questionSource: 'library',
-                familyFriendly: true,
-                noTimer: false,
-                roundLimit: true,
-                showQuestionToSpy: true,
-                anonymousVoting: false,
-                hideAnswerStatus: false,
-                round: 1,
-                usedQuestionIds: [],
-                usedQuestionTexts: [],
-                currentQuestion: null,
-                answers: [],
-                votes: [],
-                lastEliminated: null,
-                winner: null,
-                answerTimerEnd: null,
-                voteTimerEnd: null,
-            },
-            chatMessages: [],
-        };
-        
-        try {
-            await db.ref(`rooms/${roomId}`).set(initialState);
-            setLocalPlayerId(playerId);
-            subscribeToGameState(roomId, playerId);
-            localStorage.setItem('spy-game-session', JSON.stringify({ roomId, playerId }));
-        } catch (e) {
-            console.error("Failed to create room: ", e);
-            setError("Не удалось создать комнату.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    
-    const handleJoinRoom = async (playerName: string, roomId: string, avatar: string | null) => {
-        isExitingRef.current = false;
-        setIsLoading(true);
-        setError(null);
-        const upperRoomId = roomId.toUpperCase();
-        const roomRef = db.ref(`rooms/${upperRoomId}`);
-    
-        try {
-            const snapshot = await roomRef.get();
-            if (!snapshot.exists()) {
-                setError('Комната не найдена. Проверьте код.');
-                return;
-            }
-    
-            const roomState: GameState = snapshot.val();
-
-            // --- GHOST ROOM CLEANUP ---
-            const playersInRoom = roomState.players ? Object.values(roomState.players) : [];
-            if (playersInRoom.length === 0) {
-                await roomRef.remove();
-                setError('Комната не найдена (была пуста и удалена).');
-                return;
-            }
-            // --- END GHOST ROOM CLEANUP ---
-
-            const playersInRoomList = Object.values(roomState.players || {}) as Player[];
-    
-            // Rejoin Logic (check for disconnected players with the same Firebase Auth UID)
-            const rejoiningPlayerAuthUid = firebaseAuthUid;
-            const disconnectedPlayerByAuthUid = playersInRoomList.find(p => p.firebaseAuthUid === rejoiningPlayerAuthUid && p.connectionStatus === 'disconnected');
-    
-            if (disconnectedPlayerByAuthUid) {
-                const rejoiningPlayerId = disconnectedPlayerByAuthUid.id;
-                if (!rejoiningPlayerId || !rejoiningPlayerAuthUid) {
-                    setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
-                    setIsLoading(false);
-                    return;
-                }
-    
-                const updates: { [key: string]: any } = {};
-                updates[`players/${rejoiningPlayerId}/connectionStatus`] = 'connected';
-                // Always update name and avatar to ensure ghost player data is overwritten
-                updates[`players/${rejoiningPlayerId}/name`] = playerName;
-                updates[`players/${rejoiningPlayerId}/avatar`] = avatar;
-                // Ensure firebaseAuthUid is correct, though it should already match
-                updates[`players/${rejoiningPlayerId}/firebaseAuthUid`] = rejoiningPlayerAuthUid;
-
-                await roomRef.update(updates);
-    
-                setLocalPlayerId(rejoiningPlayerId);
-                subscribeToGameState(upperRoomId, rejoiningPlayerId);
-                localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId: rejoiningPlayerId }));
-                return;
-            }
-    
-            // --- New Player Join Logic ---
-            // Allow joining if the name is taken by the same user (who is stuck as 'connected')
-            if (playersInRoomList.some(p => p.name === playerName && p.firebaseAuthUid !== firebaseAuthUid)) {
-                setError('Игрок с таким именем уже в комнате.');
-                return;
-            }
-    
-            if (roomState.public.gamePhase !== 'SETUP') {
-                setError('Игра уже началась. Вы не можете присоединиться.');
-                return;
-            }
-            
-            if (playersInRoomList.length >= 12) {
-                setError('Комната заполнена.');
-                return;
-            }
-    
-            const playerId = localPlayerId;
-            const authUid = firebaseAuthUid;
             if (!playerId || !authUid) {
+
                 setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
+
                 setIsLoading(false);
+
                 return;
+
             }
-            const newPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, firebaseAuthUid: authUid };
-            const playerRef = db.ref(`rooms/${upperRoomId}/players/${playerId}`);
-            await playerRef.set(newPlayer);
+
+            const roomId = generateId();
+
     
+
+            const hostPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: true, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, firebaseAuthUid: authUid };
+
+            
+
+            const initialState = {
+
+                players: { [playerId]: hostPlayer },
+
+                public: {
+
+                    roomId,
+
+                    hostId: playerId,
+
+                    gamePhase: 'SETUP',
+
+                    initialSpyCount: 1,
+
+                    votingEnabled: true,
+
+                    questionSource: 'library',
+
+                    familyFriendly: true,
+
+                    noTimer: false,
+
+                    roundLimit: true,
+
+                    showQuestionToSpy: true,
+
+                    anonymousVoting: false,
+
+                    hideAnswerStatus: false,
+
+                    round: 1,
+
+                    usedQuestionIds: [],
+
+                    usedQuestionTexts: [],
+
+                    currentQuestion: null,
+
+                    answers: [],
+
+                    votes: [],
+
+                    lastEliminated: null,
+
+                    winner: null,
+
+                    answerTimerEnd: null,
+
+                    voteTimerEnd: null,
+
+                    lastActivityTimestamp: firebase.database.ServerValue.TIMESTAMP as any,
+
+                },
+
+                chatMessages: [],
+
+            };
+
+            
+
+            try {
+
+                await db.ref(`rooms/${roomId}`).set(initialState);
+
                 setLocalPlayerId(playerId);
-                subscribeToGameState(upperRoomId, playerId);
-                localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId }));
+
+                subscribeToGameState(roomId, playerId);
+
+                localStorage.setItem('spy-game-session', JSON.stringify({ roomId, playerId }));
+
+            } catch (e) {
+
+                console.error("Failed to create room: ", e);
+
+                setError("Не удалось создать комнату.");
+
+            } finally {
+
+                setIsLoading(false);
+
+            }
+
+        };
+
+        
+
+        const handleJoinRoom = async (playerName: string, roomId: string, avatar: string | null) => {
+
+            isExitingRef.current = false;
+
+            setIsLoading(true);
+
+            setError(null);
+
+            const upperRoomId = roomId.toUpperCase();
+
+            const roomRef = db.ref(`rooms/${upperRoomId}`);
+
+        
+
+            try {
+
+                const snapshot = await roomRef.get();
+
+                if (!snapshot.exists()) {
+
+                    setError('Комната не найдена. Проверьте код.');
+
+                    return;
+
+                }
+
+        
+
+                const roomState: GameState = snapshot.val();
+
     
-        } catch (e) {
-            console.error("Failed to join room: ", e);
-            setError("Не удалось присоединиться к комнате. Проверьте соединение.");
-        } finally {
-            setIsLoading(false);
-        }
-    };
+
+                // --- GHOST ROOM CLEANUP ---
+
+                const playersInRoom = roomState.players ? Object.values(roomState.players) : [];
+
+                if (playersInRoom.length === 0) {
+
+                    await roomRef.remove();
+
+                    setError('Комната не найдена (была пуста и удалена).');
+
+                    return;
+
+                }
+
+                // --- END GHOST ROOM CLEANUP ---
+
+    
+
+                const playersInRoomList = Object.values(roomState.players || {}) as Player[];
+
+        
+
+                // Rejoin Logic (check for disconnected players with the same Firebase Auth UID)
+
+                const rejoiningPlayerAuthUid = firebaseAuthUid;
+
+                const disconnectedPlayerByAuthUid = playersInRoomList.find(p => p.firebaseAuthUid === rejoiningPlayerAuthUid && p.connectionStatus === 'disconnected');
+
+        
+
+                if (disconnectedPlayerByAuthUid) {
+
+                    const rejoiningPlayerId = disconnectedPlayerByAuthUid.id;
+
+                    if (!rejoiningPlayerId || !rejoiningPlayerAuthUid) {
+
+                        setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
+
+                        setIsLoading(false);
+
+                        return;
+
+                    }
+
+        
+
+                    const updates: { [key: string]: any } = {};
+
+                    updates[`players/${rejoiningPlayerId}/connectionStatus`] = 'connected';
+
+                    // Always update name and avatar to ensure ghost player data is overwritten
+
+                    updates[`players/${rejoiningPlayerId}/name`] = playerName;
+
+                    updates[`players/${rejoiningPlayerId}/avatar`] = avatar;
+
+                    // Ensure firebaseAuthUid is correct, though it should already match
+
+                    updates[`players/${rejoiningPlayerId}/firebaseAuthUid`] = rejoiningPlayerAuthUid;
+
+                    updates['public/lastActivityTimestamp'] = firebase.database.ServerValue.TIMESTAMP;
+
+    
+
+                    await roomRef.update(updates);
+
+        
+
+                    setLocalPlayerId(rejoiningPlayerId);
+
+                    subscribeToGameState(upperRoomId, rejoiningPlayerId);
+
+                    localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId: rejoiningPlayerId }));
+
+                    return;
+
+                }
+
+        
+
+                // --- New Player Join Logic ---
+
+                // Allow joining if the name is taken by the same user (who is stuck as 'connected')
+
+                if (playersInRoomList.some(p => p.name === playerName && p.firebaseAuthUid !== firebaseAuthUid)) {
+
+                    setError('Игрок с таким именем уже в комнате.');
+
+                    return;
+
+                }
+
+        
+
+                if (roomState.public.gamePhase !== 'SETUP') {
+
+                    setError('Игра уже началась. Вы не можете присоединиться.');
+
+                    return;
+
+                }
+
+                
+
+                if (playersInRoomList.length >= 12) {
+
+                    setError('Комната заполнена.');
+
+                    return;
+
+                }
+
+        
+
+                const playerId = localPlayerId;
+
+                const authUid = firebaseAuthUid;
+
+                if (!playerId || !authUid) {
+
+                    setError("Ошибка аутентификации. Пожалуйста, попробуйте снова.");
+
+                    setIsLoading(false);
+
+                    return;
+
+                }
+
+                const newPlayer: Player = { id: playerId, name: playerName, avatar, isSpy: false, isEliminated: false, isHost: false, connectionStatus: 'connected', joinTimestamp: firebase.database.ServerValue.TIMESTAMP as any, firebaseAuthUid: authUid };
+
+                const playerRef = db.ref(`rooms/${upperRoomId}/players/${playerId}`);
+
+                await playerRef.set(newPlayer);
+
+                await db.ref(`rooms/${upperRoomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP as any);
+
+        
+
+                    setLocalPlayerId(playerId);
+
+                    subscribeToGameState(upperRoomId, playerId);
+
+                    localStorage.setItem('spy-game-session', JSON.stringify({ roomId: upperRoomId, playerId }));
+
+        
+
+            } catch (e) {
+
+                console.error("Failed to join room: ", e);
+
+                setError("Не удалось присоединиться к комнате. Проверьте соединение.");
+
+            } finally {
+
+                setIsLoading(false);
+
+            }
+
+        };
 
     const handleTransferHost = (newHostId: string) => {
         if (!isHost || !publicGameState?.roomId || !localPlayerId) return;
@@ -719,11 +922,21 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         }
     };
 
-    const handleAnswerSubmit = (answer: string) => handleAction('public/answers', { playerId: localPlayerId, answer }, 
-        (current) => current?.some((a: Answer) => a.playerId === localPlayerId));
+    const handleAnswerSubmit = (answer: string) => {
+        handleAction('public/answers', { playerId: localPlayerId, answer }, 
+            (current) => current?.some((a: Answer) => a.playerId === localPlayerId));
+        if (publicGameState?.roomId) {
+            db.ref(`rooms/${publicGameState.roomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP);
+        }
+    };
 
-    const handleVoteSubmit = (votedForId: string | null) => handleAction('public/votes', { voterId: localPlayerId, votedForId },
-        (current) => current?.some((v: Vote) => v.voterId === localPlayerId));
+    const handleVoteSubmit = (votedForId: string | null) => {
+        handleAction('public/votes', { voterId: localPlayerId, votedForId },
+            (current) => current?.some((v: Vote) => v.voterId === localPlayerId));
+        if (publicGameState?.roomId) {
+            db.ref(`rooms/${publicGameState.roomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP);
+        }
+    };
 
     const handleVoteRevealFinished = async () => {
         if (!isHost || !combinedGameState) return;
@@ -785,7 +998,12 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const handleSendMessage = (text: string) => {
         if (!localPlayer || !publicGameState?.roomId) return;
         const message: ChatMessage = { senderId: localPlayer.id, senderName: localPlayer.name, senderAvatar: localPlayer.avatar || null, text, timestamp: firebase.database.ServerValue.TIMESTAMP as any, status: 'sent' };
-        db.ref(`rooms/${publicGameState.roomId}/chatMessages`).push(message).catch(e => console.error("Failed to send message:", e));
+        const roomRef = db.ref(`rooms/${publicGameState.roomId}`);
+        roomRef.child('chatMessages').push(message)
+            .then(() => {
+                roomRef.child('public/lastActivityTimestamp').set(firebase.database.ServerValue.TIMESTAMP);
+            })
+            .catch(e => console.error("Failed to send message:", e));
     };
 
     const handleChatOpen = useCallback(() => {
