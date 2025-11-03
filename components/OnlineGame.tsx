@@ -1184,7 +1184,9 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         if (newQuestion) {
             let questionWithDynamicAnswers = { ...newQuestion };
             if (questionWithDynamicAnswers.type === 'PLAYERS') {
-                questionWithDynamicAnswers.answers = Object.values(currentState.players).filter((p: Player) => !p.isEliminated).map((p: Player) => p.name);
+                questionWithDynamicAnswers.answers = Object.values(currentState.players)
+                    .filter((p: Player) => !p.isEliminated && p.name) // Добавлена проверка на p.name
+                    .map((p: Player) => p.name);
             }
             updateData = {
                 round: currentState.round,
