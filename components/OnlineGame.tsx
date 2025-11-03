@@ -298,13 +298,21 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
             const roomRef = db.ref(`rooms/${roomId}`);
             roomRef.transaction((currentRoomData) => {
-                if (!currentRoomData || !currentRoomData.players || !currentRoomData.players[currentLocalPlayerId] || !currentRoomData.public) {
+                if (!currentRoomData || !currentRoomData.players || !currentRoomData.public) {
                     return currentRoomData;
                 }
+                
+                const leavingPlayerState = currentRoomData.players[currentLocalPlayerId];
+                
+                // If the player is not in the room data (e.g., was kicked), just exit the transaction.
+                if (!leavingPlayerState) {
+                    return currentRoomData;
+                }
+
                 const isLeavingPlayerHost = currentRoomData.public.hostId === currentLocalPlayerId;
                 
                 // Mark player as disconnected instead of deleting them
-                currentRoomData.players[currentLocalPlayerId].connectionStatus = 'disconnected';
+                leavingPlayerState.connectionStatus = 'disconnected';
 
                 const remainingConnectedPlayers = Object.values(currentRoomData.players).filter(p => p.connectionStatus === 'connected');
 
@@ -317,7 +325,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                         const nextHost = remainingConnectedPlayers.sort((a: Player, b: Player) => (a.joinTimestamp || 0) - (b.joinTimestamp || 0))[0];
                         currentRoomData.public.hostId = nextHost.id;
                         currentRoomData.players[nextHost.id].isHost = true;
-                        currentRoomData.players[currentLocalPlayerId].isHost = false; // Old host is no longer host
+                        leavingPlayerState.isHost = false; // Old host is no longer host
                     }
                     // If no connected players, the host remains disconnected, and the room stays.
                 }
@@ -1338,7 +1346,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         }).catch(e => console.error(`Transaction failed for ${path}`, e));
     };
     
-    const handleGameStart = (spyCount: number, source: QuestionSource, familyMode: boolean) => {
+    const handleGameStart = useCallback((spyCount: number, source: QuestionSource, familyMode: boolean) => {
         if (!isHost || !players) return;
 
         const playerList = Object.values({ ...players }) as Player[];
@@ -1380,7 +1388,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             db.ref(`rooms/${publicGameState.roomId}`).update(rootUpdates)
                 .catch(e => console.error("Failed to start game:", e));
         }
-    };
+    }, [isHost, players, forcedSpies, publicGameState?.roomId]);
 
     const handleAcknowledgeRole = () => {
         if (!publicGameState?.roomId || !localPlayerId) return;
@@ -1417,8 +1425,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
 
     const handleVoteRevealFinished = async () => {
         if (!isHost || !combinedGameState) return;
-        const winner = checkWinConditions(Object.values(players));
-        const initialPlayerCount = Object.keys(players).length;
+        const winner = checkWinConditions(Object.values(combinedGameState.players));
+        const initialPlayerCount = Object.keys(combinedGameState.players).length;
         if (winner || (combinedGameState.roundLimit && combinedGameState.round >= initialPlayerCount - 1)) {
             updateGameState({ winner: winner || 'SPIES', gamePhase: 'GAME_OVER' });
         } else {
