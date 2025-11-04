@@ -325,7 +325,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                                 const roomsToDelete: string[] = [];
                                 for (const roomId in allRooms) {
                                     // Robustness: Skip rooms with invalid IDs (empty, control chars, firebase special chars) or malformed data.
-                                    if (!roomId || /[\u0000-\u001F\u007F.#$\[\]\/]/.test(roomId) || typeof allRooms[roomId] !== 'object' || allRooms[roomId] === null) {
+                                    if (typeof roomId !== 'string' || !roomId || /[\u0000-\u001F\u007F.#$\[\]\/]/.test(roomId) || typeof allRooms[roomId] !== 'object' || allRooms[roomId] === null) {
                                         console.warn(`Skipping garbage collection for invalid room entry: ${roomId}`);
                                         continue;
                                     }
