@@ -1,4 +1,11 @@
-Снова на клоудфлайер всё работает а на файрбейс
-Uncaught SyntaxError: "undefined" is not valid JSON
-    at JSON.parse (<anonymous>)
-    at index-DR2rOnx9.js:1844:685
+index-B9pKJ4eS.js:190 Failed to save online game settings QuotaExceededError: Failed to execute 'setItem' on 'Storage': Setting the value of 'spy-game-online-settings' exceeded the quota.
+    at index-B9pKJ4eS.js:190:16646
+    at Ba (index-B9pKJ4eS.js:48:92838)
+    at Qf (index-B9pKJ4eS.js:48:108082)
+    at Jn (index-B9pKJ4eS.js:48:107966)
+    at Qf (index-B9pKJ4eS.js:48:108062)
+    at Jn (index-B9pKJ4eS.js:48:107966)
+    at Qf (index-B9pKJ4eS.js:48:108848)
+    at Jn (index-B9pKJ4eS.js:48:107966)
+    at Qf (index-B9pKJ4eS.js:48:108848)
+    at Jn (index-B9pKJ4eS.js:48:107966)

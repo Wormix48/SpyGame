@@ -25,6 +25,7 @@ interface SetupScreenProps {
 }
 const SETTINGS_KEY = 'spy-game-online-settings';
 export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, isHost, roomId, initialSettings, onSettingsChange, onKickPlayer, onTransferHost, forcedSpies }) => {
+  console.log('SetupScreen rendered');
   const [copyButtonText, setCopyButtonText] = useState('Копировать ссылку-приглашение');
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   // Load settings on initial mount for host, then let parent component control state
@@ -65,18 +66,19 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
       const settingsToSave = { spyCount: initialSpyCount, ...restOfSettings };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
     } catch(e) {
-      console.error("Failed to save online game settings", e);
+      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
+        console.warn("Failed to save online game settings: QuotaExceededError. Local storage is full, settings will not persist.");
+      } else {
+        console.error("Failed to save online game settings:", e);
+      }
     }
   }, [isHost, initialSettings]);
   const playerCount = players.length;
-  console.log('SetupScreen: playerCount', playerCount);
   const maxSpyCount = useMemo(() => {
     const maxBasedOnBalance = Math.floor((playerCount - 1) / 2);
     const calculatedMax = Math.max(1, Math.min(3, maxBasedOnBalance));
-    console.log('SetupScreen: maxBasedOnBalance', maxBasedOnBalance, 'calculatedMax', calculatedMax);
     return calculatedMax;
   }, [playerCount]);
-  console.log('SetupScreen: initialSettings.initialSpyCount', initialSettings.initialSpyCount);
   useEffect(() => {
     if (isHost && initialSettings.initialSpyCount > maxSpyCount) {
       onSettingsChange({ spyCount: maxSpyCount });
