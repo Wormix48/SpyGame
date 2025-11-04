@@ -3,7 +3,6 @@ import { QuestionSource, Player } from '../types';
 import { Avatar } from './Avatar';
 import { CrossIcon, PencilIcon, KeyIcon, WarningIcon } from './icons';
 import { ApiKeyModal } from './ApiKeyModal';
-
 interface SetupScreenProps {
   onGameStart: (spyCount: number, questionSource: QuestionSource, familyFriendly: boolean) => void;
   players: Player[];
@@ -24,13 +23,10 @@ interface SetupScreenProps {
   onTransferHost: (playerId: string) => void;
   forcedSpies: Set<string>;
 }
-
 const SETTINGS_KEY = 'spy-game-online-settings';
-
 export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, isHost, roomId, initialSettings, onSettingsChange, onKickPlayer, onTransferHost, forcedSpies }) => {
   const [copyButtonText, setCopyButtonText] = useState('Копировать ссылку-приглашение');
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
-  
   // Load settings on initial mount for host, then let parent component control state
   useEffect(() => {
     if (!isHost) return;
@@ -61,7 +57,6 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost]);
-
   // Save settings whenever they change for host
   useEffect(() => {
     if (!isHost) return;
@@ -73,25 +68,20 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
       console.error("Failed to save online game settings", e);
     }
   }, [isHost, initialSettings]);
-  
   const playerCount = players.length;
   console.log('SetupScreen: playerCount', playerCount);
-
   const maxSpyCount = useMemo(() => {
     const maxBasedOnBalance = Math.floor((playerCount - 1) / 2);
     const calculatedMax = Math.max(1, Math.min(3, maxBasedOnBalance));
     console.log('SetupScreen: maxBasedOnBalance', maxBasedOnBalance, 'calculatedMax', calculatedMax);
     return calculatedMax;
   }, [playerCount]);
-  
   console.log('SetupScreen: initialSettings.initialSpyCount', initialSettings.initialSpyCount);
-  
   useEffect(() => {
     if (isHost && initialSettings.initialSpyCount > maxSpyCount) {
       onSettingsChange({ spyCount: maxSpyCount });
     }
   }, [isHost, maxSpyCount, initialSettings.initialSpyCount, onSettingsChange]);
-
   const handleCopyLink = () => {
     const plainUrl = window.location.href.split('?')[0];
     const invitationLink = `${plainUrl}?join=${roomId}`;
@@ -103,12 +93,10 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
         setTimeout(() => setCopyButtonText('Копировать ссылку-приглашение'), 2000);
     });
   };
-
   const handleGameStartClick = (e: React.FormEvent) => {
     e.preventDefault();
     onGameStart(initialSettings.initialSpyCount, initialSettings.questionSource, initialSettings.familyFriendly);
   };
-
   const handleAiSourceClick = () => {
     const savedKey = localStorage.getItem('gemini-api-key');
     if (savedKey) {
@@ -117,19 +105,16 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
         setIsApiModalOpen(true);
     }
   };
-
   const handleApiModalSave = () => {
       setIsApiModalOpen(false);
       onSettingsChange({ questionSource: 'ai' });
   };
-
   const handleApiModalCancel = () => {
       setIsApiModalOpen(false);
       if (!localStorage.getItem('gemini-api-key')) {
           onSettingsChange({ questionSource: 'library' });
       }
   };
-  
   if (!isHost) {
       return (
           <div className="flex flex-col items-center justify-center text-center min-h-[450px]">
@@ -165,7 +150,6 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
           </div>
       );
   }
-
   return (
     <div className="flex flex-col items-center text-center">
       <h2 className="text-3xl font-bold text-white mb-4">Настройки игры</h2>
@@ -182,7 +166,6 @@ export const SetupScreen: React.FC<SetupScreenProps> = ({ onGameStart, players, 
             </button>
         </div>
       </div>
-      
       <div className="flex flex-col md:flex-row gap-8 w-full">
         <form onSubmit={handleGameStartClick} className="w-full md:w-1/2 space-y-8">
             <div>

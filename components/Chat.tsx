@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Player, ChatMessage } from '../types';
 import { ChatIcon, CheckIcon, ReadIcon } from './icons';
 import { Avatar } from './Avatar';
-
 interface ChatProps {
     localPlayer: Player;
     messages: ChatMessage[];
@@ -10,7 +9,6 @@ interface ChatProps {
     onChatOpen: () => void;
     isEliminated: boolean;
 }
-
 const MessageStatus: React.FC<{ status?: 'sending' | 'sent' | 'read' }> = ({ status }) => {
     if (status === 'sending') {
         return <CheckIcon className="w-4 h-4 text-slate-400" title="Отправка..." />;
@@ -23,18 +21,15 @@ const MessageStatus: React.FC<{ status?: 'sending' | 'sent' | 'read' }> = ({ sta
     }
     return null;
 };
-
 export const Chat: React.FC<ChatProps> = ({ localPlayer, messages, onSendMessage, onChatOpen, isEliminated }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [newMessage, setNewMessage] = useState('');
     const [unreadCount, setUnreadCount] = useState(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const lastReadMessageCount = useRef(messages.length);
-
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
-
     useEffect(() => {
         if (isOpen) {
             onChatOpen();
@@ -49,14 +44,11 @@ export const Chat: React.FC<ChatProps> = ({ localPlayer, messages, onSendMessage
             setUnreadCount(newUnreadFromOthers);
         }
     }, [messages, isOpen, localPlayer.id, onChatOpen]);
-
     useEffect(() => {
         if (isOpen) {
             scrollToBottom();
         }
     }, [messages, isOpen]);
-
-
     const handleSend = (e: React.FormEvent) => {
         e.preventDefault();
         const trimmedMessage = newMessage.trim();
@@ -65,11 +57,9 @@ export const Chat: React.FC<ChatProps> = ({ localPlayer, messages, onSendMessage
             setNewMessage('');
         }
     };
-    
     const toggleChat = () => {
         setIsOpen(prev => !prev);
     };
-
     return (
         <div className="fixed bottom-4 left-4 z-30">
             {isOpen ? (

@@ -1,14 +1,10 @@
-
-
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-
 interface ApiKeyModalProps {
   isOpen: boolean;
   onSave: () => void;
   onCancel: () => void;
 }
-
 const validateApiKey = async (apiKey: string): Promise<boolean> => {
     if (!apiKey.trim()) return false;
     try {
@@ -24,12 +20,10 @@ const validateApiKey = async (apiKey: string): Promise<boolean> => {
         return false;
     }
 };
-
 export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onCancel }) => {
   const [apiKey, setApiKey] = useState('');
   const [error, setError] = useState('');
   const [isValidating, setIsValidating] = useState(false);
-
   useEffect(() => {
     if (isOpen) {
       const savedKey = localStorage.getItem('gemini-api-key');
@@ -38,9 +32,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onCanc
       }
     }
   }, [isOpen]);
-
   if (!isOpen) return null;
-
   const handleSave = async () => {
     setIsValidating(true);
     setError('');
@@ -53,13 +45,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onCanc
     }
     setIsValidating(false);
   };
-  
   const handleCancel = () => {
       setError('');
       setApiKey('');
       onCancel();
   }
-
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 animate-fade-in" aria-modal="true" role="dialog">
       <div className="bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-md m-4">
@@ -79,7 +69,6 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onSave, onCanc
         />
         {error && <p className="text-red-400 mt-2 text-sm" role="alert">{error}</p>}
         {isValidating && <p className="text-cyan-400 mt-2 text-sm" aria-live="polite">Проверка ключа...</p>}
-
         <div className="flex justify-end gap-4 mt-6">
           <button onClick={handleCancel} disabled={isValidating} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">
             Отмена

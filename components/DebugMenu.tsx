@@ -3,11 +3,9 @@ import { GameState, Player, Answer, Vote, ChatMessage } from '../types';
 import { db, firebase } from '../firebase';
 import { generateId } from '../utils';
 import { Avatar } from './Avatar';
-
 const RANDOM_NAMES: string[] = ['Alice', 'Bob', 'Charlie', 'Dana', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Judy'];
 const RANDOM_AVATARS: string[] = ['😀', '😎', '🤖', '👽', '🤡', '🦄', '🦊', '🐙', '🦁', '🐸'];
 const RANDOM_MESSAGES: string[] = ['Всем привет!', 'Кто шпион?', 'Подозрительно...', '🤔', 'Я думаю, это ты!', 'Ха-ха', 'Я не шпион, честно!', 'Очень интересный вопрос.', 'Сложный выбор.', 'Всем удачи!'];
-
 interface DebugMenuProps {
     gameState: GameState;
     onClose: () => void;
@@ -15,11 +13,9 @@ interface DebugMenuProps {
     onToggleForceSpy?: (playerId: string) => void;
     isHost?: boolean;
 }
-
 export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forcedSpies, onToggleForceSpy, isHost = true }) => {
     const [revealSpies, setRevealSpies] = useState(document.body.classList.contains('spy-reveal-mode'));
     const isDisabled = !isHost;
-    
     useEffect(() => {
         const observer = new MutationObserver((mutationsList) => {
             for (const mutation of mutationsList) {
@@ -31,30 +27,23 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         observer.observe(document.body, { attributes: true });
         return () => observer.disconnect();
     }, []);
-
     useEffect(() => {
         if (!isHost || !gameState.roomId) return;
         const updates: { [key: string]: any } = {};
         let shouldUpdate = false;
-        
         const fakePlayerIds = gameState.players ? Object.keys(gameState.players).filter(id => id.startsWith('BOT-')) : [];
-
         fakePlayerIds.forEach(botId => {
             const botState = gameState.players[botId];
             if (!botState) return;
-
             if (gameState.gamePhase === 'ROLE_REVEAL' && !botState.roleAcknowledged) {
                 updates[`/rooms/${gameState.roomId}/players/${botId}/roleAcknowledged`] = true;
                 shouldUpdate = true;
             }
         });
-
         if (shouldUpdate) {
             db.ref().update(updates);
         }
     }, [gameState, isHost]);
-
-
     const addFakePlayer = () => {
         if (gameState.gamePhase !== 'SETUP') {
             alert("Можно добавлять ботов только в лобби.");
@@ -74,7 +63,6 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
             counter++;
         }
         const avatar = RANDOM_AVATARS[Math.floor(Math.random() * RANDOM_AVATARS.length)];
-        
         const newProfile = { id: playerId, name, avatar, firebaseAuthUid: 'FAKE_AUTH_UID_' + generateId() };
         const newState: Omit<Player, 'name' | 'avatar' | 'firebaseAuthUid'> = { 
             id: playerId, 
@@ -86,21 +74,17 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
             roleAcknowledged: false, 
             readyForNextRound: false 
         };
-
         const updates: { [key: string]: any } = {};
         updates[`rooms/${gameState.roomId}/playerProfiles/${playerId}`] = newProfile;
         updates[`rooms/${gameState.roomId}/players/${playerId}`] = newState;
-        
         db.ref().update(updates);
     };
-
     const removeFakePlayer = (botId: string) => {
         const updates: { [key: string]: null } = {};
         updates[`rooms/${gameState.roomId}/playerProfiles/${botId}`] = null;
         updates[`rooms/${gameState.roomId}/players/${botId}`] = null;
         db.ref().update(updates);
     };
-
     const getConnectedBots = (includeEliminated = false) => {
         let bots = (Object.values(gameState.players) as Player[]).filter(p => p.id.startsWith('BOT-'));
         if (!includeEliminated) {
@@ -108,7 +92,6 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         }
         return bots;
     };
-
     const handleBulkMessage = () => getConnectedBots(true).forEach(bot => sendRandomMessage(bot));
     const handleBulkAnswer = () => { if (gameState.gamePhase === 'ANSWERING') getConnectedBots().forEach(bot => sendRandomAnswer(bot.id)); };
     const handleBulkVote = () => { if (gameState.gamePhase === 'RESULTS_DISCUSSION' && gameState.votingEnabled) getConnectedBots().forEach(bot => sendRandomVote(bot.id)); };
@@ -125,13 +108,11 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
     const toggleConnection = (botId: string, currentStatus: 'connected' | 'disconnected' | undefined) => {
         db.ref(`rooms/${gameState.roomId}/players/${botId}/connectionStatus`).set(currentStatus === 'connected' ? 'disconnected' : 'connected');
     };
-
     const sendRandomMessage = (bot: Player) => {
         const messageText = RANDOM_MESSAGES[Math.floor(Math.random() * RANDOM_MESSAGES.length)];
         const message: ChatMessage = { senderId: bot.id, senderName: bot.name, senderAvatar: bot.avatar, text: messageText, timestamp: firebase.database.ServerValue.TIMESTAMP as any, status: 'sent' };
         db.ref(`rooms/${gameState.roomId}/chatMessages`).push(message);
     };
-
     const sendRandomAnswer = (botId: string) => {
         if (gameState.gamePhase !== 'ANSWERING' || !gameState.currentQuestion || gameState.answers?.some(a => a.playerId === botId)) return;
         const answerOptions = gameState.currentQuestion.answers;
@@ -141,7 +122,6 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
             const newAnswer = { playerId: botId, answer: randomAnswer }; if (!currentData) return [newAnswer]; if (currentData.some(a => a.playerId === botId)) return; return [...currentData, newAnswer];
         });
     };
-
     const sendRandomVote = (botId: string) => {
         if (gameState.gamePhase !== 'RESULTS_DISCUSSION' || !gameState.votingEnabled || gameState.votes?.some(v => v.voterId === botId)) return;
         const activePlayers = (Object.values(gameState.players) as Player[]).filter(p => !p.isEliminated);
@@ -152,23 +132,19 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
             const newVote = { voterId: botId, votedForId }; if (!currentData) return [newVote]; if (currentData.some(v => v.voterId === botId)) return; return [...currentData, newVote];
         });
     };
-
     const markAsReady = (botId: string) => db.ref(`rooms/${gameState.roomId}/players/${botId}/readyForNextRound`).set(true);
-
     const commonButtonClass = "text-xs py-1 px-2 rounded bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed";
     const bulkButtonClass = "text-xs py-2 px-2 rounded bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed";
     const allPlayers = (Object.values(gameState.players) as Player[]).sort((a, b) => (a.joinTimestamp || 0) - (b.joinTimestamp || 0));
     const realPlayers = allPlayers.filter(p => !p.id.startsWith('BOT-'));
     const bots = allPlayers.filter(p => p.id.startsWith('BOT-'));
     const canForceSpies = gameState.gamePhase === 'SETUP' && onToggleForceSpy && forcedSpies && revealSpies;
-
     return (
         <div className="fixed bottom-4 right-4 bg-slate-800/90 backdrop-blur-sm rounded-xl shadow-lg border border-cyan-500 z-50 w-96 max-h-[90vh] flex flex-col text-white animate-fade-in">
             <div className="flex justify-between items-center p-3 border-b border-slate-700">
                 <h2 className="font-bold text-cyan-400">Меню отладки</h2>
                 <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
             </div>
-
              <div className="flex-1 overflow-y-auto px-3 py-1">
                 {revealSpies && (
                     <div className="py-2 border-b border-slate-700">
@@ -193,7 +169,6 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
                         ))}
                     </div>
                 )}
-
                 <div className="py-2">
                     <h3 className="font-bold text-sm text-cyan-400 mb-2">Боты ({bots.length})</h3>
                     <div className="space-y-2">

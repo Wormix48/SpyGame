@@ -1,10 +1,8 @@
 import React from 'react';
-
 interface LoadingScreenProps {
   title?: string;
   description?: string;
 }
-
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({ 
     title = "Загрузка...", 
     description 

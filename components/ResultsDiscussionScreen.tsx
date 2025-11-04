@@ -2,31 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { Player, Question, Answer, Vote } from '../types';
 import { Avatar } from './Avatar';
 import { CrossIcon, WarningIcon, CheckIcon, KeyIcon } from './icons';
-
 interface TimerProps {
     expiryTimestamp: number | null;
     onExpire: () => void;
 }
-
 const Timer: React.FC<TimerProps> = ({ expiryTimestamp, onExpire }) => {
     const [timeLeft, setTimeLeft] = useState(0);
-
     useEffect(() => {
         if (!expiryTimestamp) return;
-
         const calculateTimeLeft = () => {
             const diff = expiryTimestamp - Date.now();
             return Math.round(Math.max(0, diff) / 1000);
         }
-
         const initialTime = calculateTimeLeft();
         setTimeLeft(initialTime);
-
         if (initialTime <= 0) {
             onExpire();
             return;
         }
-
         const interval = setInterval(() => {
             const newTime = calculateTimeLeft();
             if (newTime <= 0) {
@@ -35,20 +28,15 @@ const Timer: React.FC<TimerProps> = ({ expiryTimestamp, onExpire }) => {
             }
             setTimeLeft(newTime);
         }, 1000);
-
         return () => clearInterval(interval);
     }, [expiryTimestamp, onExpire]);
-
     if (!expiryTimestamp || timeLeft <= 0) return null;
-
     return (
         <div className="bg-slate-900/80 rounded-lg p-2 flex items-center justify-center border border-cyan-500 mb-4">
             <span className="text-cyan-400 text-xl font-bold">Время на голосование: {timeLeft}</span>
         </div>
     );
 };
-
-
 interface ResultsDiscussionScreenProps {
   question: Question;
   players: Player[];
@@ -56,7 +44,6 @@ interface ResultsDiscussionScreenProps {
   isHost: boolean;
   isLocalMode: boolean;
   revealVotes?: boolean;
-  
   // Online props (optional)
   votes?: Vote[];
   localPlayerId?: string;
@@ -67,7 +54,6 @@ interface ResultsDiscussionScreenProps {
   noTimer?: boolean;
   onKickPlayer?: (playerId: string) => void;
   onTransferHost?: (playerId: string) => void;
-
   // Local props (optional)
   onFinishLocalVoting?: (votes: Vote[]) => void;
   localSequentialVoter?: Player;
@@ -76,7 +62,6 @@ interface ResultsDiscussionScreenProps {
   onProceedToVote?: () => void;
   showQuestionToSpy?: boolean;
 }
-
 // FIX: Updated default prop functions to accept arguments, resolving "Expected 0 arguments, but got 1" errors.
 export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = ({ 
     question, players, answers, votes = [], localPlayerId = '', onVote = (votedForId: string | null) => {}, onTally = () => {}, 
@@ -85,14 +70,12 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
     isDiscussionOnly = false, onProceedToVote = () => {}, showQuestionToSpy = true, revealVotes = false
 }) => {
   const [localVotes, setLocalVotes] = useState<Record<string, string | null>>({});
-
   const getVoteForPlayer = (playerId: string) => {
     const vote = votes.find(v => v.voterId === playerId);
     if (!vote) return null;
     if (vote.votedForId === null) return 'Пропустил';
     return players.find(p => p.id === vote.votedForId)?.name || 'Неизвестно';
   };
-
   const shouldShowQuestion = () => {
     if (isLocalMode) {
         // In local mode on a shared screen, the question is shown/hidden for everyone based on the setting.
@@ -100,30 +83,23 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
     }
     const localPlayer = players.find(p => p.id === localPlayerId);
     if (!localPlayer) return true; // Default to showing if player not found (shouldn't happen)
-
     const localPlayerIsSpy = localPlayer.isSpy;
     const isSpectator = localPlayer.isEliminated;
-
     // In online mode, show if you're not a spy OR if the setting allows spies to see it.
     // Spectators (eliminated players) should always see the question.
     return !localPlayerIsSpy || showQuestionToSpy || isSpectator;
   };
-
   const hasVoted = (playerId: string) => {
     if (isLocalMode) return !!localVotes[playerId];
     return votes.some(v => v.voterId === playerId);
   }
-
   const getAnswerForPlayer = (playerId: string) => {
     return (answers || []).find(a => a.playerId === playerId)?.answer || 'Нет ответа';
   };
-
   const activePlayers = players.filter(p => !p.isEliminated);
-
   const handleLocalVote = (voter: Player, votedFor: Player | null) => {
     setLocalVotes(prev => ({...prev, [voter.id]: votedFor?.id ?? null }));
   }
-
   const handleFinishLocalVoting = () => {
     const allVotes: Vote[] = activePlayers.map(p => ({
         voterId: p.id,
@@ -131,7 +107,6 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
     }));
     onFinishLocalVoting(allVotes);
   };
-
   if (isLocalMode) {
      const commonUI = (
         <>
@@ -156,7 +131,6 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
             </div>
         </>
      );
-     
      if (isDiscussionOnly) {
          return (
             <div className="flex flex-col items-center">
@@ -167,7 +141,6 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
             </div>
         );
      }
-     
      if (localSequentialVoter) { // Sequential voting mode
         return (
             <div className="flex flex-col items-center">
@@ -247,12 +220,10 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
          )
      }
   }
-
     // Online Mode Render
     const localPlayer = players.find(p => p.id === localPlayerId);
     const isSpectator = !!localPlayer?.isEliminated;
     const localPlayerHasVoted = hasVoted(localPlayerId);
-
     return (
       <div className="flex flex-col items-center w-full max-w-4xl mx-auto">
         <h2 className="text-3xl font-bold mb-4 text-center">Результаты и Обсуждение</h2>
@@ -262,18 +233,15 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
               <p className="text-2xl text-cyan-400 font-bold">{question.text}</p>
             </div>
         )}
-        
         {/* Таймер */}
         {votingEnabled && !isLocalMode && <Timer expiryTimestamp={timerEnd} onExpire={() => { if(isHost) onTally() }} />}
         {isSpectator && <p className="text-slate-400 text-center bg-slate-800 p-3 rounded-lg mb-4">Вы выбыли и не можете голосовать.</p>}
-
         {/* Блоки ответов и голосования (обновленный дизайн) */}
         <div className="w-full space-y-4 mb-6">
           <div className="grid grid-cols-2 gap-4 text-center text-xl font-bold text-slate-300 mb-2">
             <div className="text-left p-4">Ответы</div>
             <div className="text-center p-4">Голосование</div>
           </div>
-
           {/* Строки с игроками */}
           {activePlayers.map(player => {
               if (!player) return null;
@@ -290,11 +258,9 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
                                                     <span className="text-sm text-yellow-400 font-medium">(за: {getVoteForPlayer(player.id)})</span>
                                                 )}
                                             </div>
-                                        
                                             <div className="flex items-center space-x-2">
                                                 {/* Галочка справа от имени */}
                                                 {voted && <CheckIcon className="w-6 h-6 text-green-400" title="Проголосовал(а)" />}
-              
                                                 {/* Admin/Disconnect controls */}
                                                 {player.connectionStatus === 'disconnected' && <WarningIcon className="w-5 h-5 text-yellow-400" title="Игрок отключился" />}
                                                 {isHost && !player.isHost && !player.id.startsWith('BOT-') && (
@@ -355,9 +321,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
               </div>
               );
           })}
-
         </div>
-
         {/* Дополнительные кнопки голосования (отдельный блок) */}
         {votingEnabled && (
           <div className="w-full max-w-md flex flex-col gap-3 mt-6">

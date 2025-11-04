@@ -1,18 +1,14 @@
 import React from 'react';
-
 interface PassDeviceScreenProps {
   nextPlayerName: string;
   onReady: () => void;
   title: string;
   instruction: string;
 }
-
 export const PassDeviceScreen: React.FC<PassDeviceScreenProps> = ({ nextPlayerName, onReady, title, instruction }) => {
-  
   const handleReady = () => {
     onReady();
   }
-
   return (
     <div className="flex flex-col items-center justify-center text-center animate-fade-in min-h-[450px]">
       <h2 className="text-3xl font-bold text-white mb-6">{title}</h2>

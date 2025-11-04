@@ -2,7 +2,6 @@ import React from 'react';
 import { Player } from '../types';
 import { Avatar } from './Avatar';
 import { CheckIcon, CrossIcon, KeyIcon, WarningIcon } from './icons';
-
 interface NextRoundSyncScreenProps {
   players: Player[];
   localPlayerId: string;
@@ -12,19 +11,15 @@ interface NextRoundSyncScreenProps {
   onKickPlayer: (playerId: string) => void;
   onTransferHost: (playerId: string) => void;
 }
-
 export const NextRoundSyncScreen: React.FC<NextRoundSyncScreenProps> = ({ players, localPlayerId, isHost, onContinue, onReady, onKickPlayer, onTransferHost }) => {
     const localPlayer = players.find(p => p.id === localPlayerId);
-
     React.useEffect(() => {
         if (localPlayer && !localPlayer.isEliminated && !localPlayer.readyForNextRound) {
             onReady();
         }
     }, [localPlayer, onReady]);
-
     const activePlayers = players.filter(p => !p.isEliminated);
     const allReady = activePlayers.filter(p => p.connectionStatus !== 'disconnected').every(p => p.readyForNextRound);
-    
     if (isHost) {
         return (
             <div className="flex flex-col items-center justify-center text-center animate-fade-in min-h-[450px]">
@@ -34,14 +29,12 @@ export const NextRoundSyncScreen: React.FC<NextRoundSyncScreenProps> = ({ player
                     {activePlayers.map(p => {
                         const isReady = p.readyForNextRound;
                         const isDisconnected = p.connectionStatus === 'disconnected';
-                        
                         let backgroundClass = 'bg-slate-800'; // Waiting
                         if (isReady) {
                             backgroundClass = 'bg-green-600/50';
                         } else if (isDisconnected) {
                             backgroundClass = 'bg-slate-700 opacity-60';
                         }
-
                         return (
                             <div key={p.id} className={`flex items-center justify-between p-2 rounded-md transition-colors ${backgroundClass}`}>
                                <div className="flex items-center gap-2">
@@ -92,7 +85,6 @@ export const NextRoundSyncScreen: React.FC<NextRoundSyncScreenProps> = ({ player
             </div>
         );
     }
-
     // Client view
     return (
         <div className="flex flex-col items-center justify-center text-center animate-fade-in min-h-[450px]">

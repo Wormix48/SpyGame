@@ -1,11 +1,9 @@
 import React from 'react';
 import { PlayerIcon } from './icons';
-
 interface AvatarProps {
   avatar: string | null;
   className?: string;
 }
-
 export const Avatar: React.FC<AvatarProps> = ({ avatar, className }) => {
   if (avatar && avatar.startsWith('data:image')) {
     return (
@@ -16,7 +14,6 @@ export const Avatar: React.FC<AvatarProps> = ({ avatar, className }) => {
       />
     );
   }
-
   // Render as emoji if it's not a base64 image (or null)
   if (avatar) {
     const fontSize = className?.includes('w-32') ? 'text-6xl' : 
@@ -29,7 +26,6 @@ export const Avatar: React.FC<AvatarProps> = ({ avatar, className }) => {
       </div>
     );
   }
-
   return (
     <div className={`flex items-center justify-center bg-slate-700 rounded-full ${className}`}>
       <PlayerIcon className="w-3/4 h-3/4 text-slate-400" />

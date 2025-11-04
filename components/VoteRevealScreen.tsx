@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Player, Vote } from '../types';
 import { CrossIcon, WarningIcon } from './icons';
 import { Avatar } from './Avatar';
-
 interface VoteRevealScreenProps {
   eliminatedPlayer: Player | null;
   votes: Vote[];
@@ -13,7 +12,6 @@ interface VoteRevealScreenProps {
   anonymousVoting: boolean;
   revealSpies: boolean;
 }
-
 const AshEffect: React.FC = () => {
     const particles = useMemo(() => {
         const p = [];
@@ -29,7 +27,6 @@ const AshEffect: React.FC = () => {
         }
         return p;
     }, []);
-
     return (
         <div className="absolute inset-0 z-10 overflow-hidden rounded-xl">
             {particles.map((style, i) => (
@@ -38,11 +35,9 @@ const AshEffect: React.FC = () => {
         </div>
     );
 };
-
 export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPlayer, votes, players, onContinue, isHost, isLocalMode, anonymousVoting, revealSpies }) => {
   const getPlayer = (id: string): Player | undefined => players.find(p => p.id === id);
   const [startBurnEffect, setStartBurnEffect] = useState(false);
-
   useEffect(() => {
       if (eliminatedPlayer) {
           const timer = setTimeout(() => {
@@ -51,7 +46,6 @@ export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPl
           return () => clearTimeout(timer);
       }
   }, [eliminatedPlayer]);
-
   return (
     <div className="flex flex-col items-center text-center animate-fade-in">
       {eliminatedPlayer ? (
@@ -75,7 +69,6 @@ export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPl
           <p className="text-xl text-slate-300 mb-6">Игроки не смогли прийти к единому мнению. Никто не выбывает в этом раунде.</p>
         </>
       )}
-
       {!anonymousVoting && votes.length > 0 && (
           <div className="w-full max-w-md">
             <h3 className="text-xl font-semibold mb-3">Детали голосования:</h3>
@@ -111,7 +104,6 @@ export const VoteRevealScreen: React.FC<VoteRevealScreenProps> = ({ eliminatedPl
             </div>
           </div>
       )}
-      
       {isHost || isLocalMode ? (
         <button
             onClick={() => onContinue()}

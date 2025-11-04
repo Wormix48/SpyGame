@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { QuestionMarkIcon } from './icons';
-
-
 const RulesContent: React.FC = () => (
     <div className="space-y-4 text-slate-300 text-left text-sm">
         <div>
@@ -12,7 +10,6 @@ const RulesContent: React.FC = () => (
                 <li><strong>Шпионы:</strong> Скрывать свою роль, блефовать и не быть раскрытыми до конца игры.</li>
             </ul>
         </div>
-
         <div>
             <h3 className="text-lg font-bold text-cyan-400 mb-2">Ход игры</h3>
             <ol className="list-decimal list-inside space-y-1">
@@ -24,7 +21,6 @@ const RulesContent: React.FC = () => (
                 <li><strong>Новый раунд:</strong> Если игра не окончена, начинается новый раунд.</li>
             </ol>
         </div>
-
         <div>
             <h3 className="text-lg font-bold text-cyan-400 mb-2">Условия победы</h3>
             <ul className="list-disc list-inside space-y-1">
@@ -32,7 +28,6 @@ const RulesContent: React.FC = () => (
                 <li><strong>Победа шпионов:</strong> Шпионов становится столько же, сколько игроков или шпион остаётся нераскрытым за отведённое число раундов.</li>
             </ul>
         </div>
-        
         <div>
             <h3 className="text-lg font-bold text-cyan-400 mb-2">Параметры игры</h3>
             <ul className="list-disc list-inside space-y-1">
@@ -45,7 +40,6 @@ const RulesContent: React.FC = () => (
         </div>
     </div>
 );
-
 const RulesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     return createPortal(
         <div
@@ -71,10 +65,8 @@ const RulesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         document.body
     );
 };
-
 export const HelpTooltip: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
-    
     return (
         <div className="relative z-20">
             <button
@@ -84,7 +76,6 @@ export const HelpTooltip: React.FC = () => {
             >
                 <QuestionMarkIcon className="w-6 h-6 text-white" />
             </button>
-
             {isOpen && <RulesModal onClose={() => setIsOpen(false)} />}
         </div>
     );

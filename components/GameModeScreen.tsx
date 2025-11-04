@@ -1,15 +1,11 @@
 import React from 'react';
-
 interface GameModeScreenProps {
   onSelectMode: (mode: 'online' | 'local') => void;
 }
-
 export const GameModeScreen: React.FC<GameModeScreenProps> = ({ onSelectMode }) => {
-
   const handleSelect = (mode: 'online' | 'local') => {
     onSelectMode(mode);
   }
-
   return (
     <div className="flex flex-col items-center justify-center text-center min-h-[450px]">
       <h2 className="text-3xl font-bold text-white mb-8">Выберите режим игры</h2>

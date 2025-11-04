@@ -4,21 +4,16 @@ import { CrossIcon, DragHandleIcon, PencilIcon } from './icons';
 import { Avatar } from './Avatar';
 import { processImage, generateId } from '../utils';
 import { ApiKeyModal } from './ApiKeyModal';
-
 interface PlayerProfile {
   id: string;
   name: string;
   avatar: string | null;
 }
-
 interface LocalSetupScreenProps {
   onGameStart: (players: PlayerProfile[], spyCount: number, votingEnabled: boolean, questionSource: QuestionSource, familyFriendly: boolean, roundLimit: boolean, showQuestionToSpy: boolean, anonymousVoting: boolean) => void;
 }
-
 const SETTINGS_KEY = 'spy-game-local-settings';
-
 const PlayerListItem = memo(({ player, index, editingIndex, editingName, onEdit, onSaveEdit, setEditingName, onRemove, onAvatarClick, onDragStart, onDragEnter, onDragEnd, onDragOver }: any) => {
-    
     return (
         <div 
             className="flex items-center justify-between bg-slate-700 p-2 rounded-lg text-lg font-medium text-white cursor-grab transition-shadow duration-200"
@@ -40,7 +35,6 @@ const PlayerListItem = memo(({ player, index, editingIndex, editingName, onEdit,
         </div>
     );
 });
-
 export const LocalSetupScreen: React.FC<LocalSetupScreenProps> = ({ onGameStart }) => {
   const [players, setPlayers] = useState<PlayerProfile[]>([
     { id: generateId(), name: 'Игрок 1', avatar: null },
@@ -56,15 +50,12 @@ export const LocalSetupScreen: React.FC<LocalSetupScreenProps> = ({ onGameStart 
   const [showQuestionToSpy, setShowQuestionToSpy] = useState(true);
   const [anonymousVoting, setAnonymousVoting] = useState(false);
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
-
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [editingName, setEditingName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const playerToUpdateAvatar = useRef<string | null>(null);
-
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
-
   useEffect(() => {
     try {
       const savedSettingsRaw = localStorage.getItem(SETTINGS_KEY);
@@ -83,19 +74,15 @@ export const LocalSetupScreen: React.FC<LocalSetupScreenProps> = ({ onGameStart 
       }
     } catch (e) { console.error("Failed to load local game settings", e); }
   }, []);
-
   useEffect(() => {
     try {
       const settingsToSave = { players, spyCount, votingEnabled, familyFriendly, questionSource, roundLimit, showQuestionToSpy, anonymousVoting };
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settingsToSave));
     } catch (e) { console.error("Failed to save local game settings", e); }
   }, [players, spyCount, votingEnabled, familyFriendly, questionSource, roundLimit, showQuestionToSpy, anonymousVoting]);
-
   const playerCount = players.length;
   const maxSpyCount = useMemo(() => Math.max(1, Math.min(3, Math.floor((playerCount - 1) / 2))), [playerCount]);
-
   useEffect(() => { if (spyCount > maxSpyCount) setSpyCount(maxSpyCount); }, [maxSpyCount, spyCount]);
-  
   const handleAddPlayer = () => {
     const trimmedName = newPlayerName.trim();
     if (trimmedName && !players.some(p => p.name === trimmedName)) {
@@ -103,16 +90,13 @@ export const LocalSetupScreen: React.FC<LocalSetupScreenProps> = ({ onGameStart 
       setNewPlayerName('');
     }
   };
-
   const handleRemovePlayer = useCallback((idToRemove: string) => {
     setPlayers(p => p.filter(player => player.id !== idToRemove));
   }, []);
-  
   const handleEdit = useCallback((index: number) => {
     setEditingIndex(index);
     setEditingName(players[index].name);
   }, [players]);
-
   const handleSaveEdit = useCallback(() => {
     if (editingIndex === null) return;
     const trimmedName = editingName.trim();
@@ -127,7 +111,6 @@ export const LocalSetupScreen: React.FC<LocalSetupScreenProps> = ({ onGameStart 
     setEditingIndex(null);
     setEditingName('');
   }, [editingIndex, editingName, players]);
-  
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0] && playerToUpdateAvatar.current) {
       try {
@@ -143,15 +126,12 @@ export const LocalSetupScreen: React.FC<LocalSetupScreenProps> = ({ onGameStart 
       }
     }
   };
-  
   const triggerAvatarUpload = useCallback((playerId: string) => {
     playerToUpdateAvatar.current = playerId;
     fileInputRef.current?.click();
   }, []);
-
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, position: number) => { dragItem.current = position; };
   const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, position: number) => { dragOverItem.current = position; };
-
   const handleDrop = () => {
     if (dragItem.current === null || dragOverItem.current === null) return;
     const newPlayers = [...players];
@@ -162,14 +142,12 @@ export const LocalSetupScreen: React.FC<LocalSetupScreenProps> = ({ onGameStart 
     dragOverItem.current = null;
     setPlayers(newPlayers);
   };
-  
   const handleGameStartClick = (e: React.FormEvent) => {
     e.preventDefault();
     if (players.length >= 3) {
       onGameStart(players, spyCount, votingEnabled, questionSource, familyFriendly, roundLimit, showQuestionToSpy, anonymousVoting);
     }
   };
-
   const handleAiSourceClick = () => {
     const savedKey = localStorage.getItem('gemini-api-key');
     if (savedKey) {
@@ -178,25 +156,21 @@ export const LocalSetupScreen: React.FC<LocalSetupScreenProps> = ({ onGameStart 
         setIsApiModalOpen(true);
     }
   };
-
   const handleApiModalSave = () => {
       setIsApiModalOpen(false);
       setQuestionSource('ai');
   };
-
   const handleApiModalCancel = () => {
       setIsApiModalOpen(false);
       if (!localStorage.getItem('gemini-api-key')) {
           setQuestionSource('library');
       }
   };
-
   return (
     <div className="flex flex-col items-center text-center animate-fade-in">
       <h2 className="text-3xl font-bold text-white mb-6">Настройки игры (Локально)</h2>
       <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
       <ApiKeyModal isOpen={isApiModalOpen} onSave={handleApiModalSave} onCancel={handleApiModalCancel} />
-      
       <div className="flex flex-col md:flex-row gap-8 w-full">
         <form onSubmit={handleGameStartClick} className="w-full md:w-1/2 space-y-6">
           <div>

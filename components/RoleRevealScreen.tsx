@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Player } from '../types';
 import { SpyIcon, PlayerIcon, CheckIcon, CrossIcon, QuestionMarkIcon, KeyIcon, WarningIcon } from './icons';
 import { Avatar } from './Avatar';
-
 interface RoleRevealScreenProps {
   player: Player;
   onContinue: () => void;
@@ -13,24 +12,19 @@ interface RoleRevealScreenProps {
   onKickPlayer?: (playerId: string) => void;
   onTransferHost?: (playerId: string) => void;
 }
-
 export const RoleRevealScreen: React.FC<RoleRevealScreenProps> = ({ player, onContinue, isHost, isLocalMode, players, onAcknowledgeRole, onKickPlayer, onTransferHost }) => {
   const [isRevealed, setIsRevealed] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
-
   useEffect(() => {
     if (isFinished && isLocalMode) {
       const timer = setTimeout(onContinue, 1000); // 1s delay to show message
       return () => clearTimeout(timer);
     }
   }, [isFinished, isLocalMode, onContinue]);
-  
-
   const handleReveal = () => {
     if (isRevealed) return; // Prevent re-triggering
     setIsRevealed(true);
   };
-  
   const handleHide = () => {
     if (!isRevealed) return;
     if (!isLocalMode) {
@@ -38,9 +32,7 @@ export const RoleRevealScreen: React.FC<RoleRevealScreenProps> = ({ player, onCo
     }
     setIsFinished(true);
   };
-
   const handleClick = isRevealed ? handleHide : handleReveal;
-
   if (isFinished) {
     if (isLocalMode) {
       return (
@@ -49,7 +41,6 @@ export const RoleRevealScreen: React.FC<RoleRevealScreenProps> = ({ player, onCo
         </div>
       );
     }
-
     // Online mode
     if (isHost) {
         const allAcknowledged = players?.every(p => p.roleAcknowledged || p.isEliminated || p.connectionStatus === 'disconnected');
@@ -107,7 +98,6 @@ export const RoleRevealScreen: React.FC<RoleRevealScreenProps> = ({ player, onCo
             </div>
         );
      }
-
     return (
       <div className="flex flex-col items-center justify-center text-center animate-fade-in min-h-[450px]">
         <h2 className="text-3xl font-bold text-white mb-6">Ожидание других игроков...</h2>
@@ -115,7 +105,6 @@ export const RoleRevealScreen: React.FC<RoleRevealScreenProps> = ({ player, onCo
       </div>
     );
   }
-
   return (
     <div className="flex flex-col items-center justify-center min-h-[450px]">
         <h2 className="text-2xl font-bold mb-4">Твоя роль, {player.name}</h2>
@@ -129,7 +118,6 @@ export const RoleRevealScreen: React.FC<RoleRevealScreenProps> = ({ player, onCo
                     </div>
                     <p className="mt-6 text-slate-300 animate-pulse">Нажми, чтобы перевернуть</p>
                 </div>
-                
                 {/* Back of the card */}
                 <div className={`absolute w-full h-full backface-hidden rounded-xl flex flex-col items-center justify-center p-6 border-2 shadow-lg rotate-y-180 cursor-pointer ${player.isSpy ? 'bg-red-900/50 border-red-500 shadow-red-500/20' : 'bg-green-900/50 border-green-500 shadow-green-500/20'}`}>
                     {player.isSpy ? (

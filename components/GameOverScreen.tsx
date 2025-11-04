@@ -2,7 +2,6 @@ import React from 'react';
 import { Player } from '../types';
 import { SpyIcon, PlayerIcon } from './icons';
 import { Avatar } from './Avatar';
-
 interface GameOverScreenProps {
   winner: 'PLAYERS' | 'SPIES';
   players: Player[];
@@ -12,11 +11,9 @@ interface GameOverScreenProps {
   isLocalMode: boolean;
   customMessage?: string;
 }
-
 export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, players, onNewGame, onReplay, isHost, isLocalMode, customMessage }) => {
   const spies = players.filter(p => p.isSpy);
   const survivors = players.filter(p => !p.isEliminated && !p.isSpy);
-
   const renderWinnerCard = () => {
     if (winner === 'PLAYERS') {
       return (
@@ -35,7 +32,6 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, players,
         </div>
       );
     }
-
     if (winner === 'SPIES') {
       return (
         <div className="relative w-64 h-96 rounded-xl flex flex-col items-center justify-start p-4 border-2 shadow-lg bg-red-900/50 spy-win-card">
@@ -57,7 +53,6 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, players,
     }
     return null;
   };
-
   return (
     <div className="flex flex-col items-center text-center animate-fade-in">
       {customMessage ? (
@@ -72,9 +67,7 @@ export const GameOverScreen: React.FC<GameOverScreenProps> = ({ winner, players,
       <p className="text-xl text-slate-300 mb-6">
         {customMessage || (winner === 'PLAYERS' ? 'Все шпионы были найдены!' : 'Шпионы смогли обмануть всех!')}
       </p>
-
       {renderWinnerCard()}
-      
       <div className="flex items-center justify-center gap-4 mt-8 w-full">
          {(isHost || isLocalMode) && (
              <button
