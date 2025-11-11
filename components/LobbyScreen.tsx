@@ -22,10 +22,18 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({ onCreateRoom, onJoinRo
         if (savedProfile) {
             const { name, avatar: savedAvatar } = JSON.parse(savedProfile);
             if (name) setPlayerName(name);
-            if (savedAvatar) setAvatar(savedAvatar);
+            // Validate avatar: it should be a short string (emoji) or start with 'data:image/' (base64)
+            // The problematic string is very long, so this check should catch it.
+            if (savedAvatar && (typeof savedAvatar === 'string' && (savedAvatar.length <= 2 || savedAvatar.startsWith('data:image/')))) {
+                setAvatar(savedAvatar);
+            } else {
+                // If avatar is invalid (e.g., the long UID string, or null/undefined), reset to default.
+                setAvatar('😀'); 
+            }
         }
     } catch (e) {
         console.error("Failed to parse player profile from localStorage", e);
+        setAvatar('😀'); // Reset to default on parsing error
     }
   }, []);
 
