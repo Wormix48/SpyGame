@@ -91,7 +91,7 @@ export const ResultsDiscussionScreen: React.FC<ResultsDiscussionScreenProps> = (
   };
   const hasVoted = (playerId: string) => {
     if (isLocalMode) return !!localVotes[playerId];
-    return votes.some(v => v.voterId === playerId);
+    return (votes || []).some(v => v.voterId === playerId);
   }
   const getAnswerForPlayer = (playerId: string) => {
     return (answers || []).find(a => a.playerId === playerId)?.answer || 'Нет ответа';

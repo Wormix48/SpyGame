@@ -5,15 +5,6 @@ interface AvatarProps {
   className?: string;
 }
 export const Avatar: React.FC<AvatarProps> = ({ avatar, className }) => {
-  if (avatar && avatar.startsWith('data:image')) {
-    return (
-      <img
-        src={avatar}
-        alt="Аватар игрока"
-        className={`rounded-full object-cover bg-slate-700 ${className}`}
-      />
-    );
-  }
   // Render as emoji if it's not a base64 image (or null)
   if (avatar) {
     const fontSize = className?.includes('w-32') ? 'text-6xl' : 

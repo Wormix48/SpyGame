@@ -3,7 +3,7 @@
 export interface Player {
   id: string;
   name: string;
-  avatar: string | null;
+  avatar: string;
   isSpy: boolean;
   isEliminated: boolean;
   isHost: boolean;
@@ -48,7 +48,7 @@ export interface Vote {
 export interface ChatMessage {
     senderId: string;
     senderName: string;
-    senderAvatar: string | null;
+    senderAvatar: string;
     text: string;
     timestamp: number;
     status?: 'sending' | 'sent' | 'read';

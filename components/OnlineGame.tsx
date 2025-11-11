@@ -8,7 +8,7 @@ import { ResultsDiscussionScreen } from './ResultsDiscussionScreen';
 import { VoteRevealScreen } from './VoteRevealScreen';
 import { GameOverScreen } from './GameOverScreen';
 import { LoadingScreen } from './LoadingScreen';
-import { generateId, checkWinConditions, generateNewQuestion, generateUuid } from '../utils';
+import { generateId, checkWinConditions, generateNewQuestion, generateUuid, RANDOM_AVATARS } from '../utils';
 import { Chat } from './Chat';
 import { db, ensureUserIsAuthenticated } from '../firebase';
 import firebase from 'firebase/app';
@@ -33,6 +33,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const [playerProfiles, setPlayerProfiles] = useState<Record<string, Pick<Player, 'id' | 'name' | 'avatar' | 'firebaseAuthUid'>>>({});
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
     const [publicGameState, setPublicGameState] = useState<Partial<GameState>>({});
+    const [answers, setAnswers] = useState<Answer[]>([]);
+    const [votes, setVotes] = useState<Vote[]>([]);
     // --- End State Refactoring ---
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -138,6 +140,18 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             if (isExitingRef.current) return;
             const publicData = snapshot.val();
             if (publicData) {
+                // Transform answers from object to array if they exist
+                if (publicData.answers && typeof publicData.answers === 'object') {
+                    publicData.answers = Object.values(publicData.answers);
+                } else if (!publicData.answers) {
+                    publicData.answers = [];
+                }
+                // Transform votes from object to array if they exist
+                if (publicData.votes && typeof publicData.votes === 'object') {
+                    publicData.votes = Object.values(publicData.votes);
+                } else if (!publicData.votes) {
+                    publicData.votes = [];
+                }
                 setPublicGameState(publicData);
             } else {
                 // This handles the case where the room is deleted.
@@ -176,10 +190,24 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             message.key = snapshot.key; 
             setChatMessages(prevMessages => [...prevMessages, message]);
         };
-        chatRef.on('child_added', chatCallback);
-        listeners.push({ ref: chatRef, event: 'child_added', callback: chatCallback });
-        // No longer need a separate room.on('value') check, as the publicRef callback handles room deletion.
-        gameStateUnsubscribeRef.current = () => {
+                chatRef.on('child_added', chatCallback);
+                listeners.push({ ref: chatRef, event: 'child_added', callback: chatCallback });
+        
+                // New subscriptions for answers and votes to reduce public object size
+                const votesRef = roomRef.child('public/votes');
+                const votesCallback = (snapshot: firebase.database.DataSnapshot) => {
+                    if (isExitingRef.current) return;
+                    const vote = snapshot.val();
+                    setVotes(prevVotes => {
+                        if (prevVotes.some(v => v.voterId === vote.voterId)) return prevVotes;
+                        return [...prevVotes, vote];
+                    });
+                };
+                votesRef.on('child_added', votesCallback);
+                listeners.push({ ref: votesRef, event: 'child_added', callback: votesCallback });
+        
+                // No longer need a separate room.on('value') check, as the publicRef callback handles room deletion.
+                gameStateUnsubscribeRef.current = () => {
             listeners.forEach(({ ref, event, callback }) => ref.off(event, callback));
         };
     }, []);
@@ -297,9 +325,28 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
         };
     }, []);
-        const updateGameState = useCallback((newState: Partial<GameState>) => {
-            if (isHost && publicGameState?.roomId) {
-                const updates: { [key: string]: any } = {};
+        const updateGameState = useCallback((newState: Partial<GameState> & { playerId?: string, avatar?: string }) => {
+            if (!publicGameState?.roomId) return;
+            const updates: { [key: string]: any } = {};
+
+            let updatedPlayerId: string | undefined = newState.playerId;
+            let updatedAvatar: string | undefined = newState.avatar;
+
+            if (updatedPlayerId && updatedAvatar !== undefined) {
+                // Update specific player's avatar
+                updates[`playerProfiles/${updatedPlayerId}/avatar`] = updatedAvatar;
+                // Also update local state immediately for responsiveness
+                setPlayerProfiles(prev => ({
+                    ...prev,
+                    [updatedPlayerId!]: { ...prev[updatedPlayerId!], avatar: updatedAvatar! }
+                }));
+                // Remove playerId and avatar from newState to prevent them from being treated as public game state
+                delete newState.playerId;
+                delete newState.avatar;
+            }
+
+            // Only host can update public game state and other player states
+            if (isHost) {
                 Object.entries(newState).forEach(([key, value]) => {
                     if (['players', 'chatMessages'].includes(key)) {
                         updates[`/${key}`] = value;
@@ -309,8 +356,15 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 });
                 updates['/public/lastActivityTimestamp'] = firebase.database.ServerValue.TIMESTAMP;
                 db.ref(`rooms/${publicGameState.roomId}`).update(updates).catch(e => console.error("Update game state failed:", e));
+            } else if (Object.keys(updates).length > 0) {
+                // If not host, but there are player profile updates (e.g., avatar change by non-host)
+                // Only allow updating own profile, and only if it's not a public game state change
+                if (updatedPlayerId === localPlayerId && updatedAvatar !== undefined) {
+                    db.ref(`rooms/${publicGameState.roomId}/playerProfiles/${localPlayerId}`).update({ avatar: updatedAvatar })
+                        .catch(e => console.error("Update player profile failed for non-host:", e));
+                }
             }
-        }, [isHost, publicGameState?.roomId]);
+        }, [isHost, publicGameState?.roomId, localPlayerId]);
         const handleCreateRoom = async (playerName: string, avatar: string | null) => {
             isExitingRef.current = false;
             setIsLoading(true);
@@ -389,8 +443,6 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                             usedQuestionIds: [],
                             usedQuestionTexts: [],
                             currentQuestion: null,
-                            answers: [],
-                            votes: [],
                             lastEliminated: null,
                             winner: null,
                             answerTimerEnd: null,
@@ -515,7 +567,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     };
     const startNewRound = useCallback(async (baseState?: GameState) => {
         const currentState = baseState || combinedGameState;
-        if (!isHost || !currentState) return;
+        if (!isHost || !currentState || !currentState.roomId) return;
         setIsGenerating(true);
         const { newQuestion, usedQuestionIds, usedQuestionTexts, error } = await generateNewQuestion(currentState);
         if (error) console.warn(error);
@@ -532,8 +584,6 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 currentQuestion: questionWithDynamicAnswers,
                 usedQuestionIds,
                 usedQuestionTexts,
-                answers: [],
-                votes: [],
                 lastEliminated: null,
                 gamePhase: 'ANSWERING',
                 answerTimerEnd: currentState.noTimer ? null : Date.now() + 30000,
@@ -541,9 +591,17 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         } else {
             updateData = { winner: 'PLAYERS', gamePhase: 'GAME_OVER' };
         }
+        const rootUpdates: { [key: string]: any } = {};
+        Object.entries(updateData).forEach(([key, value]) => {
+            rootUpdates[`/public/${key}`] = value;
+        });
+        rootUpdates['/public/lastActivityTimestamp'] = firebase.database.ServerValue.TIMESTAMP;
+        // CRITICAL: Explicitly clear answers and votes in DB
+        rootUpdates['/public/answers'] = []; // Ensure answers is an empty array, not null
+        rootUpdates['/public/votes'] = null;
         setIsGenerating(false);
-        updateGameState(updateData);
-    }, [isHost, combinedGameState, players, updateGameState]);
+        db.ref(`rooms/${currentState.roomId}`).update(rootUpdates).catch(e => console.error("Update game state failed:", e));
+    }, [isHost, combinedGameState, players]);
     const handleVoteTally = useCallback(() => {
         if (!isHost || !combinedGameState || combinedGameState.gamePhase !== 'RESULTS_DISCUSSION') return;
         const currentActivePlayers = Object.values(players).filter((p: Player) => !p.isEliminated);
@@ -573,7 +631,6 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             '/public/voteTimerEnd': null,
             '/public/gamePhase': 'VOTE_REVEAL',
             '/public/lastActivityTimestamp': firebase.database.ServerValue.TIMESTAMP,
-            '/public/votes': cleanVotes, // Persist the cleaned votes array
         };
         if (playersToEliminate.length === 1 && maxVotes >= requiredVotes) {
             const eliminatedId = playersToEliminate[0];
@@ -645,18 +702,12 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             }
         }
     }, [isHost, publicGameState, players, updateGameState]);
-    const handleAction = (path: string, value: any, condition?: (currentData: any) => boolean) => {
+    const handleAction = (path: string, value: any) => {
         if (!publicGameState?.roomId || !localPlayerId) return;
         const actionRef = db.ref(`rooms/${publicGameState.roomId}/${path}`);
-        actionRef.transaction((currentData) => {
-            if(condition && condition(currentData)) {
-                return; // Abort transaction
-            }
-            if (Array.isArray(currentData)) {
-                return [...currentData, value];
-            }
-            return [value];
-        }).catch(e => console.error(`Transaction failed for ${path}`, e));
+        // NOTE: We are switching from transaction (which reads the whole array) to push (which only writes the new item)
+        // This is a major traffic reduction. The condition check is now handled by the client-side logic before calling handleAction.
+        actionRef.push(value).catch(e => console.error(`Push failed for ${path}`, e));
     };
     const handleGameStart = useCallback((spyCount: number, source: QuestionSource, familyMode: boolean) => {
         if (!isHost || !players) return;
@@ -708,20 +759,21 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             startNewRound(combinedGameState!);
         }
     };
-    const handleAnswerSubmit = (answer: string) => {
-        handleAction('public/answers', { playerId: localPlayerId, answer }, 
-            (current) => current?.some((a: Answer) => a.playerId === localPlayerId));
-        if (publicGameState?.roomId) {
-            db.ref(`rooms/${publicGameState.roomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP);
-        }
-    };
-    const handleVoteSubmit = (votedForId: string | null) => {
-        handleAction('public/votes', { voterId: localPlayerId, votedForId },
-            (current) => current?.some((v: Vote) => v.voterId === localPlayerId));
-        if (publicGameState?.roomId) {
-            db.ref(`rooms/${publicGameState.roomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP);
-        }
-    };
+        const handleAnswerSubmit = (answer: string) => {
+            if (answers.some(a => a.playerId === localPlayerId)) return; // Client-side check
+            handleAction('public/answers', { playerId: localPlayerId, answer });
+            if (publicGameState?.roomId) {
+                db.ref(`rooms/${publicGameState.roomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP);
+            }
+        };
+    
+        const handleVoteSubmit = (votedForId: string | null) => {
+            if (votes.some(v => v.voterId === localPlayerId)) return; // Client-side check
+            handleAction('public/votes', { voterId: localPlayerId, votedForId });
+            if (publicGameState?.roomId) {
+                db.ref(`rooms/${publicGameState.roomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP);
+            }
+        };
     const handleVoteRevealFinished = async () => {
         if (!isHost || !combinedGameState) return;
         const winner = checkWinConditions(Object.values(combinedGameState.players));
@@ -737,6 +789,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
                 ...playerUpdates,
                 '/public/gamePhase': 'SYNCING_NEXT_ROUND',
                 '/public/lastActivityTimestamp': firebase.database.ServerValue.TIMESTAMP,
+                '/public/answers': [], // Ensure answers is an empty array, not null
             };
             if (publicGameState?.roomId) {
                 db.ref(`rooms/${publicGameState.roomId}`).update(rootUpdates)
@@ -770,8 +823,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             '/public/usedQuestionIds': [],
             '/public/usedQuestionTexts': [],
             '/public/currentQuestion': null,
-            '/public/answers': [],
-            '/public/votes': [],
+            '/public/answers': [], // Ensure answers is an empty array, not null
+            '/public/votes': null,
             '/public/lastEliminated': null,
             '/public/winner': null,
             '/public/gamePhase': 'SETUP',
@@ -861,7 +914,7 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const renderGameScreen = () => {
         if (isGenerating) return <LoadingScreen title="ИИ генерирует вопрос..." description="Это может занять несколько секунд." />;
         switch (publicGameState.gamePhase) {
-            case 'SETUP': return <SetupScreen onGameStart={handleGameStart} players={playerList} isHost={isHost} roomId={publicGameState.roomId!} initialSettings={combinedGameState!} onSettingsChange={(s) => updateGameState(s as GameState)} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} forcedSpies={forcedSpies} />;
+            case 'SETUP': return <SetupScreen onGameStart={handleGameStart} players={playerList} isHost={isHost} roomId={publicGameState.roomId!} localPlayerId={localPlayerId} initialSettings={combinedGameState!} onSettingsChange={(s) => updateGameState(s as GameState)} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} forcedSpies={forcedSpies} />;
             case 'ROLE_REVEAL': return <RoleRevealScreen player={localPlayer} onContinue={handleRoleRevealContinue} isHost={isHost} isLocalMode={false} players={playerList} onAcknowledgeRole={handleAcknowledgeRole} onKickPlayer={handleKickPlayer} onTransferHost={handleTransferHost} />;
             case 'SYNCING_NEXT_ROUND': 
                 return <NextRoundSyncScreen 

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { GameState, Player, Answer, Vote, ChatMessage } from '../types';
 import { db, firebase } from '../firebase';
-import { generateId } from '../utils';
+import { generateId, RANDOM_AVATARS } from '../utils';
 import { Avatar } from './Avatar';
+import { EmojiPicker } from './EmojiPicker';
 const RANDOM_NAMES: string[] = ['Alice', 'Bob', 'Charlie', 'Dana', 'Eve', 'Frank', 'Grace', 'Heidi', 'Ivan', 'Judy'];
-const RANDOM_AVATARS: string[] = ['😀', '😎', '🤖', '👽', '🤡', '🦄', '🦊', '🐙', '🦁', '🐸'];
+
 const RANDOM_MESSAGES: string[] = ['Всем привет!', 'Кто шпион?', 'Подозрительно...', '🤔', 'Я думаю, это ты!', 'Ха-ха', 'Я не шпион, честно!', 'Очень интересный вопрос.', 'Сложный выбор.', 'Всем удачи!'];
 interface DebugMenuProps {
     gameState: GameState;
@@ -15,7 +16,25 @@ interface DebugMenuProps {
 }
 export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forcedSpies, onToggleForceSpy, isHost = true }) => {
     const [revealSpies, setRevealSpies] = useState(document.body.classList.contains('spy-reveal-mode'));
+    const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+    const [playerIdToEditAvatar, setPlayerIdToEditAvatar] = useState<string | null>(null);
     const isDisabled = !isHost;
+
+    const handleAvatarClick = (playerId: string) => {
+        setPlayerIdToEditAvatar(playerId);
+        setIsEmojiPickerOpen(true);
+    };
+
+    const handleEmojiSelect = (emoji: string) => {
+        if (playerIdToEditAvatar && gameState.roomId) {
+            // Обновляем аватар бота напрямую в playerProfiles
+            db.ref(`rooms/${gameState.roomId}/playerProfiles/${playerIdToEditAvatar}/avatar`).set(emoji)
+                .catch(e => console.error("Failed to update bot avatar:", e));
+        }
+        setIsEmojiPickerOpen(false);
+        setPlayerIdToEditAvatar(null);
+    };
+
     useEffect(() => {
         const observer = new MutationObserver((mutationsList) => {
             for (const mutation of mutationsList) {
@@ -118,9 +137,7 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         const answerOptions = gameState.currentQuestion.answers;
         if (!answerOptions || answerOptions.length === 0) return;
         const randomAnswer = answerOptions[Math.floor(Math.random() * answerOptions.length)];
-        db.ref(`rooms/${gameState.roomId}/public/answers`).transaction((currentData: Answer[] | null) => {
-            const newAnswer = { playerId: botId, answer: randomAnswer }; if (!currentData) return [newAnswer]; if (currentData.some(a => a.playerId === botId)) return; return [...currentData, newAnswer];
-        });
+        db.ref(`rooms/${gameState.roomId}/public/answers`).push({ playerId: botId, answer: randomAnswer });
     };
     const sendRandomVote = (botId: string) => {
         if (gameState.gamePhase !== 'RESULTS_DISCUSSION' || !gameState.votingEnabled || gameState.votes?.some(v => v.voterId === botId)) return;
@@ -128,9 +145,7 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
         if (activePlayers.length === 0) return;
         const shouldSkip = Math.random() < 0.1; let votedForId: string | null = null;
         if (!shouldSkip) votedForId = activePlayers[Math.floor(Math.random() * activePlayers.length)].id;
-        db.ref(`rooms/${gameState.roomId}/public/votes`).transaction((currentData: Vote[] | null) => {
-            const newVote = { voterId: botId, votedForId }; if (!currentData) return [newVote]; if (currentData.some(v => v.voterId === botId)) return; return [...currentData, newVote];
-        });
+        db.ref(`rooms/${gameState.roomId}/public/votes`).push({ voterId: botId, votedForId });
     };
     const markAsReady = (botId: string) => db.ref(`rooms/${gameState.roomId}/players/${botId}/readyForNextRound`).set(true);
     const commonButtonClass = "text-xs py-1 px-2 rounded bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed";
@@ -140,89 +155,98 @@ export const DebugMenu: React.FC<DebugMenuProps> = ({ gameState, onClose, forced
     const bots = allPlayers.filter(p => p.id.startsWith('BOT-'));
     const canForceSpies = gameState.gamePhase === 'SETUP' && onToggleForceSpy && forcedSpies && revealSpies;
     return (
-        <div className="fixed bottom-4 right-4 bg-slate-800/90 backdrop-blur-sm rounded-xl shadow-lg border border-cyan-500 z-50 w-96 max-h-[90vh] flex flex-col text-white animate-fade-in">
-            <div className="flex justify-between items-center p-3 border-b border-slate-700">
-                <h2 className="font-bold text-cyan-400">Меню отладки</h2>
-                <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
-            </div>
-             <div className="flex-1 overflow-y-auto px-3 py-1">
-                {revealSpies && (
-                    <div className="py-2 border-b border-slate-700">
-                        <h3 className="font-bold text-sm text-cyan-400 mb-2">Игроки ({realPlayers.length})</h3>
-                        {realPlayers.map(player => (
-                            <div key={player.id} className="flex justify-between items-center p-1.5">
-                                <div className="flex items-center gap-2 truncate">
-                                    <Avatar avatar={player.avatar} className="w-6 h-6" />
-                                    <p className="font-bold text-sm truncate">{player.name}</p>
-                                    {revealSpies && player.isSpy && <span className="text-xs text-red-400 font-bold">(Шпион)</span>}
-                                </div>
-                                {canForceSpies && (
-                                    <button
-                                        disabled={isDisabled}
-                                        onClick={() => onToggleForceSpy(player.id)}
-                                        className={`${commonButtonClass} ${forcedSpies.has(player.id) ? 'bg-red-600 hover:bg-red-500' : ''}`}
-                                    >
-                                        {forcedSpies.has(player.id) ? 'Убрать' : 'Сделать шпионом'}
-                                    </button>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
-                <div className="py-2">
-                    <h3 className="font-bold text-sm text-cyan-400 mb-2">Боты ({bots.length})</h3>
-                    <div className="space-y-2">
-                         <button onClick={addFakePlayer} disabled={isDisabled || gameState.gamePhase !== 'SETUP'} className="w-full py-1.5 px-4 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-900 font-bold text-sm disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed">
-                            Добавить бота
-                        </button>
-                        <div className="p-2 bg-slate-900/50 rounded-lg">
-                            <p className="text-xs text-slate-400 mb-2 text-center">Массовые действия (для подключенных ботов):</p>
-                            <div className="grid grid-cols-3 gap-2">
-                                <button onClick={handleBulkMessage} disabled={isDisabled} className={bulkButtonClass}>Сообщ. за всех</button>
-                                <button onClick={handleBulkAnswer} disabled={isDisabled || gameState.gamePhase !== 'ANSWERING'} className={bulkButtonClass}>Ответ за всех</button>
-                                <button onClick={handleBulkVote} disabled={isDisabled || gameState.gamePhase !== 'RESULTS_DISCUSSION' || !gameState.votingEnabled} className={bulkButtonClass}>Голос за всех</button>
-                                <button onClick={handleBulkReady} disabled={isDisabled || gameState.gamePhase !== 'SYNCING_NEXT_ROUND'} className={bulkButtonClass}>Готов за всех</button>
-                                <button onClick={handleBulkKick} disabled={isDisabled} className={`${bulkButtonClass} bg-red-800 hover:bg-red-700 col-span-2`}>Кикнуть всех</button>
-                            </div>
-                        </div>
-                        {bots.map(bot => {
-                            const hasAnswered = gameState.answers?.some(a => a.playerId === bot.id);
-                            const hasVoted = gameState.votes?.some(v => v.voterId === bot.id);
-                            return (
-                                <div key={bot.id} className="p-2 border-t border-slate-700">
-                                    <div className="flex justify-between items-center">
-                                        <div className="flex items-center gap-2 truncate">
-                                            <Avatar avatar={bot.avatar} className="w-6 h-6" />
-                                            <p className="font-bold text-sm truncate">{bot.name}</p>
-                                            {revealSpies && bot.isSpy && <span className="text-xs text-red-400 font-bold">(Шпион)</span>}
-                                        </div>
-                                        <button onClick={() => removeFakePlayer(bot.id)} disabled={isDisabled} className="text-xs text-red-400 hover:text-red-300 disabled:text-slate-600 disabled:cursor-not-allowed">Удалить</button>
+        <>
+            {isEmojiPickerOpen && (
+                <EmojiPicker 
+                    onSelect={handleEmojiSelect}
+                    onClose={() => setIsEmojiPickerOpen(false)}
+                />
+            )}
+            <div className="fixed bottom-4 right-4 bg-slate-800/90 backdrop-blur-sm rounded-xl shadow-lg border border-cyan-500 z-50 w-96 max-h-[90vh] flex flex-col text-white animate-fade-in">
+                <div className="flex justify-between items-center p-3 border-b border-slate-700">
+                    <h2 className="font-bold text-cyan-400">Меню отладки</h2>
+                    <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                </div>
+                <div className="flex-1 overflow-y-auto px-3 py-1">
+                    {revealSpies && (
+                        <div className="py-2 border-b border-slate-700">
+                            <h3 className="font-bold text-sm text-cyan-400 mb-2">Игроки ({realPlayers.length})</h3>
+                            {realPlayers.map(player => (
+                                <div key={player.id} className="flex justify-between items-center p-1.5">
+                                    <div className="flex items-center gap-2 truncate">
+                                        <Avatar avatar={player.avatar} className="w-6 h-6" />
+                                        <p className="font-bold text-sm truncate">{player.name}</p>
+                                        {revealSpies && player.isSpy && <span className="text-xs text-red-400 font-bold">(Шпион)</span>}
                                     </div>
-                                    <div className="flex flex-wrap gap-2 mt-2">
-                                        {canForceSpies && (
-                                            <button
-                                                disabled={isDisabled}
-                                                onClick={() => onToggleForceSpy(bot.id)}
-                                                className={`${commonButtonClass} ${forcedSpies.has(bot.id) ? 'bg-red-600 hover:bg-red-500' : ''}`}
-                                            >
-                                                {forcedSpies.has(bot.id) ? 'Убрать' : 'Шпион'}
-                                            </button>
-                                        )}
-                                        <button onClick={() => toggleConnection(bot.id, bot.connectionStatus)} disabled={isDisabled} className={commonButtonClass}>
-                                            {bot.connectionStatus === 'connected' ? 'Отключить' : 'Подключить'}
+                                    {canForceSpies && (
+                                        <button
+                                            disabled={isDisabled}
+                                            onClick={() => onToggleForceSpy(player.id)}
+                                            className={`${commonButtonClass} ${forcedSpies.has(player.id) ? 'bg-red-600 hover:bg-red-500' : ''}`}
+                                        >
+                                            {forcedSpies.has(player.id) ? 'Убрать' : 'Сделать шпионом'}
                                         </button>
-                                        <button onClick={() => sendRandomMessage(bot)} disabled={isDisabled} className={commonButtonClass}>Сообщение</button>
-                                        <button onClick={() => sendRandomAnswer(bot.id)} disabled={isDisabled || gameState.gamePhase !== 'ANSWERING' || hasAnswered || bot.isEliminated} className={commonButtonClass}>Ответ</button>
-                                        <button onClick={() => sendRandomVote(bot.id)} disabled={isDisabled || gameState.gamePhase !== 'RESULTS_DISCUSSION' || hasVoted || bot.isEliminated || bot.connectionStatus !== 'connected'} className={commonButtonClass}>Голос</button>
-                                        <button onClick={() => markAsReady(bot.id)} disabled={isDisabled || gameState.gamePhase !== 'SYNCING_NEXT_ROUND' || bot.readyForNextRound || bot.connectionStatus !== 'connected'} className={commonButtonClass}>Готов</button>
-                                    </div>
+                                    )}
                                 </div>
-                            );
-                        })}
-                        {bots.length === 0 && <p className="text-center text-slate-500 pt-2 text-sm">Ботов нет.</p>}
+                            ))}
+                        </div>
+                    )}
+                    <div className="py-2">
+                        <h3 className="font-bold text-sm text-cyan-400 mb-2">Боты ({bots.length})</h3>
+                        <div className="space-y-2">
+                            <button onClick={addFakePlayer} disabled={isDisabled || gameState.gamePhase !== 'SETUP'} className="w-full py-1.5 px-4 rounded bg-cyan-600 hover:bg-cyan-500 text-slate-900 font-bold text-sm disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed">
+                                Добавить бота
+                            </button>
+                            <div className="p-2 bg-slate-900/50 rounded-lg">
+                                <p className="text-xs text-slate-400 mb-2 text-center">Массовые действия (для подключенных ботов):</p>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button onClick={handleBulkMessage} disabled={isDisabled} className={bulkButtonClass}>Сообщ. за всех</button>
+                                    <button onClick={handleBulkAnswer} disabled={isDisabled || gameState.gamePhase !== 'ANSWERING'} className={bulkButtonClass}>Ответ за всех</button>
+                                    <button onClick={handleBulkVote} disabled={isDisabled || gameState.gamePhase !== 'RESULTS_DISCUSSION' || !gameState.votingEnabled} className={bulkButtonClass}>Голос за всех</button>
+                                    <button onClick={handleBulkReady} disabled={isDisabled || gameState.gamePhase !== 'SYNCING_NEXT_ROUND'} className={bulkButtonClass}>Готов за всех</button>
+                                    <button onClick={handleBulkKick} disabled={isDisabled} className={`${bulkButtonClass} bg-red-800 hover:bg-red-700 col-span-2`}>Кикнуть всех</button>
+                                </div>
+                            </div>
+                            {bots.map(bot => {
+                                const hasAnswered = gameState.answers?.some(a => a.playerId === bot.id);
+                                const hasVoted = gameState.votes?.some(v => v.voterId === bot.id);
+                                return (
+                                    <div key={bot.id} className="p-2 border-t border-slate-700">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2 truncate">
+                                                <Avatar avatar={bot.avatar} className="w-6 h-6" />
+                                                <p className="font-bold text-sm truncate">{bot.name}</p>
+                                                {revealSpies && bot.isSpy && <span className="text-xs text-red-400 font-bold">(Шпион)</span>}
+                                            </div>
+                                            <button onClick={() => removeFakePlayer(bot.id)} disabled={isDisabled} className="text-xs text-red-400 hover:text-red-300 disabled:text-slate-600 disabled:cursor-not-allowed">Удалить</button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 mt-2">
+                                            <button onClick={() => handleAvatarClick(bot.id)} disabled={isDisabled} className={commonButtonClass}>Сменить аватар</button>
+                                            {canForceSpies && (
+                                                <button
+                                                    disabled={isDisabled}
+                                                    onClick={() => onToggleForceSpy(bot.id)}
+                                                    className={`${commonButtonClass} ${forcedSpies.has(bot.id) ? 'bg-red-600 hover:bg-red-500' : ''}`}
+                                                >
+                                                    {forcedSpies.has(bot.id) ? 'Убрать' : 'Шпион'}
+                                                </button>
+                                            )}
+                                            <button onClick={() => toggleConnection(bot.id, bot.connectionStatus)} disabled={isDisabled} className={commonButtonClass}>
+                                                {bot.connectionStatus === 'connected' ? 'Отключить' : 'Подключить'}
+                                            </button>
+                                            <button onClick={() => sendRandomMessage(bot)} disabled={isDisabled} className={commonButtonClass}>Сообщение</button>
+                                            <button onClick={() => sendRandomAnswer(bot.id)} disabled={isDisabled || gameState.gamePhase !== 'ANSWERING' || hasAnswered || bot.isEliminated} className={commonButtonClass}>Ответ</button>
+                                            <button onClick={() => sendRandomVote(bot.id)} disabled={isDisabled || gameState.gamePhase !== 'RESULTS_DISCUSSION' || hasVoted || bot.isEliminated || bot.connectionStatus !== 'connected'} className={commonButtonClass}>Голос</button>
+                                            <button onClick={() => markAsReady(bot.id)} disabled={isDisabled || gameState.gamePhase !== 'SYNCING_NEXT_ROUND' || bot.readyForNextRound || bot.connectionStatus !== 'connected'} className={commonButtonClass}>Готов</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {bots.length === 0 && <p className="text-center text-slate-500 pt-2 text-sm">Ботов нет.</p>}
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 };

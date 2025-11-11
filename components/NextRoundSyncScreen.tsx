@@ -17,7 +17,7 @@ export const NextRoundSyncScreen: React.FC<NextRoundSyncScreenProps> = ({ player
         if (localPlayer && !localPlayer.isEliminated && !localPlayer.readyForNextRound) {
             onReady();
         }
-    }, [localPlayer, onReady]);
+    }, [localPlayer?.isEliminated, localPlayer?.readyForNextRound, onReady]);
     const activePlayers = players.filter(p => !p.isEliminated);
     const allReady = activePlayers.filter(p => p.connectionStatus !== 'disconnected').every(p => p.readyForNextRound);
     if (isHost) {
