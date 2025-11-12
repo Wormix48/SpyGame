@@ -32,10 +32,9 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
     const [players, setPlayers] = useState<Record<string, Omit<Player, 'name' | 'avatar' | 'firebaseAuthUid'>>>({});
     const [playerProfiles, setPlayerProfiles] = useState<Record<string, Pick<Player, 'id' | 'name' | 'avatar' | 'firebaseAuthUid'>>>({});
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-    const [publicGameState, setPublicGameState] = useState<Partial<GameState>>({});
-    const [answers, setAnswers] = useState<Answer[]>([]);
-    const [votes, setVotes] = useState<Vote[]>([]);
-    // --- End State Refactoring ---
+        const [publicGameState, setPublicGameState] = useState<Partial<GameState>>({});
+    
+        // --- End State Refactoring ---
     const [isGenerating, setIsGenerating] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -190,25 +189,11 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
             message.key = snapshot.key; 
             setChatMessages(prevMessages => [...prevMessages, message]);
         };
-                chatRef.on('child_added', chatCallback);
-                listeners.push({ ref: chatRef, event: 'child_added', callback: chatCallback });
-        
-                // New subscriptions for answers and votes to reduce public object size
-                const votesRef = roomRef.child('public/votes');
-                const votesCallback = (snapshot: firebase.database.DataSnapshot) => {
-                    if (isExitingRef.current) return;
-                    const vote = snapshot.val();
-                    setVotes(prevVotes => {
-                        if (prevVotes.some(v => v.voterId === vote.voterId)) return prevVotes;
-                        return [...prevVotes, vote];
-                    });
-                };
-                votesRef.on('child_added', votesCallback);
-                listeners.push({ ref: votesRef, event: 'child_added', callback: votesCallback });
-        
-                // No longer need a separate room.on('value') check, as the publicRef callback handles room deletion.
-                gameStateUnsubscribeRef.current = () => {
-            listeners.forEach(({ ref, event, callback }) => ref.off(event, callback));
+                        chatRef.on('child_added', chatCallback);
+                        listeners.push({ ref: chatRef, event: 'child_added', callback: chatCallback });
+                
+                        // No longer need a separate room.on('value') check, as the publicRef callback handles room deletion.
+                        gameStateUnsubscribeRef.current = () => {            listeners.forEach(({ ref, event, callback }) => ref.off(event, callback));
         };
     }, []);
     useEffect(() => {
@@ -760,7 +745,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         }
     };
         const handleAnswerSubmit = (answer: string) => {
-            if (answers.some(a => a.playerId === localPlayerId)) return; // Client-side check
+            const currentAnswers = (publicGameState.answers ?? []) as Answer[];
+            if (currentAnswers.some(a => a.playerId === localPlayerId)) return; // Client-side check
             handleAction('public/answers', { playerId: localPlayerId, answer });
             if (publicGameState?.roomId) {
                 db.ref(`rooms/${publicGameState.roomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP);
@@ -768,7 +754,8 @@ export const OnlineGame = forwardRef<OnlineGameHandle, OnlineGameProps>(({ onExi
         };
     
         const handleVoteSubmit = (votedForId: string | null) => {
-            if (votes.some(v => v.voterId === localPlayerId)) return; // Client-side check
+            const currentVotes = (publicGameState.votes ?? []) as Vote[];
+            if (currentVotes.some(v => v.voterId === localPlayerId)) return; // Client-side check
             handleAction('public/votes', { voterId: localPlayerId, votedForId });
             if (publicGameState?.roomId) {
                 db.ref(`rooms/${publicGameState.roomId}/public/lastActivityTimestamp`).set(firebase.database.ServerValue.TIMESTAMP);
